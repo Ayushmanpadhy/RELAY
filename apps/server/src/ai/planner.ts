@@ -274,7 +274,7 @@ export async function generatePlan(brief: string, manifest: Manifest, answers?: 
   if (hasGemini) {
     const modelName = process.env.RELAY_PLANNER_MODEL && !process.env.RELAY_PLANNER_MODEL.startsWith('claude')
       ? process.env.RELAY_PLANNER_MODEL
-      : 'gemini-2.0-flash';
+      : 'gemini-3.6-flash';
 
     const systemPrompt = `You are Relay's Distributed AI Task Planner.
 Given a user's brief and a manifest of uploaded files, design an optimal distributed execution plan.

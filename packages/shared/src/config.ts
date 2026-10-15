@@ -10,8 +10,8 @@ export const CONFIG = {
   MAX_MANAGED_WORKERS: 8,
 
   // Relay V3 Configuration
-  RELAY_PLANNER_MODEL: 'claude-sonnet-5-5',
-  RELAY_WORKER_MODEL: 'claude-haiku-5-5',
+  RELAY_PLANNER_MODEL: 'gemini-3.6-flash',
+  RELAY_WORKER_MODEL: 'gemini-3.6-flash',
   MAX_JOB_COST_USD: 5,
   LLM_MAX_CONCURRENCY: 8,
   MAX_UPLOAD_BYTES: 500 * 1024 * 1024, // 500 MB limit

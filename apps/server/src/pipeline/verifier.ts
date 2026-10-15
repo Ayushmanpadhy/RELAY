@@ -70,7 +70,7 @@ export async function verifyMapStage(
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
     const model = process.env.RELAY_PLANNER_MODEL && !process.env.RELAY_PLANNER_MODEL.startsWith('claude')
       ? process.env.RELAY_PLANNER_MODEL
-      : 'gemini-2.0-flash';
+      : 'gemini-3.6-flash';
     const gemini = genAI.getGenerativeModel({
       model,
       systemInstruction: `You are Relay's Quality Verifier.

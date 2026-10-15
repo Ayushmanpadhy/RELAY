@@ -144,7 +144,7 @@ export async function proxyLlmCall(
       if (!model || model.startsWith('claude')) {
         model = process.env.RELAY_WORKER_MODEL && !process.env.RELAY_WORKER_MODEL.startsWith('claude')
           ? process.env.RELAY_WORKER_MODEL
-          : 'gemini-2.0-flash';
+          : 'gemini-3.6-flash';
       }
 
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
