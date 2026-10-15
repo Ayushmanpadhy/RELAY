@@ -1,0 +1,25 @@
+{
+  "name": "relay-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -p \"[{name}]\" -n \"server,web\" -c \"cyan.bold,magenta.bold\" \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "npm run --workspace=@relay/server dev",
+    "dev:web": "npm run --workspace=@relay/web dev",
+    "build": "npm run --workspace=@relay/shared build && npm run --workspace=@relay/server build && npm run --workspace=@relay/web build",
+    "start": "node apps/server/dist/index.js",
+    "test": "vitest run",
+    "worker": "npm run --workspace=@relay/server worker",
+    "chaos-test": "tsx scripts/chaos-test.ts"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.7"
+  }
+}

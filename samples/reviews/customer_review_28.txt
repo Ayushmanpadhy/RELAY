@@ -1,0 +1,5 @@
+Review #28 - Critical bug report and disappointment
+User: Marcus Vance, Head of Infrastructure
+Rating: 1/5
+Feedback:
+Experienced repeated timeout errors when attempting to export large 50k-row CSV datasets. The API rate limiter triggered prematurely without clear header explanations. Urgent fix needed for enterprise audit logging before we can renew our annual contract.

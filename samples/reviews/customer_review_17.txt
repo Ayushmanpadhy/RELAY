@@ -1,0 +1,5 @@
+Review #17 - Mixed feelings on recent update
+User: Sarah Lin, Product Operations Lead
+Rating: 3/5
+Feedback:
+The core analytics engine is reliable and the SQL query builder is very intuitive. However, the latest UI overhaul introduced slight clutter in the notification drawer, and mobile performance feels sluggish. Support was helpful but took 24 hours to clarify billing tier adjustments.

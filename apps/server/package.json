@@ -1,0 +1,38 @@
+{
+  "name": "@relay/server",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "worker": "tsx src/worker/main.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.134.0",
+    "@fastify/cors": "^10.0.2",
+    "@fastify/multipart": "^10.1.3",
+    "@fastify/static": "^10.1.6",
+    "@relay/shared": "*",
+    "@types/pdf-parse": "^1.1.5",
+    "adm-zip": "^0.6.1",
+    "docx": "^9.11.0",
+    "exceljs": "^4.4.0",
+    "fastify": "^5.2.1",
+    "jimp": "^1.6.1",
+    "mammoth": "^1.13.0",
+    "papaparse": "^5.7.0",
+    "pdf-parse": "^2.4.5",
+    "xlsx": "^0.18.5",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "@types/node": "^22.13.9",
+    "@types/papaparse": "^5.5.2",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.7"
+  }
+}
