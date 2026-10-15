@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
   type LlmProxyRequestInput,
   CONFIG,
@@ -107,23 +108,26 @@ export async function proxyLlmCall(
 
   await llmSemaphore.acquire();
   try {
-    const useFake = process.env.RELAY_FAKE_LLM === '1' || !process.env.ANTHROPIC_API_KEY;
+    const hasGemini = Boolean(process.env.GEMINI_API_KEY);
+    const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY);
+    const useFake = process.env.RELAY_FAKE_LLM === '1' || (!hasGemini && !hasAnthropic);
 
     if (useFake) {
+      const fakeModel = req.model || CONFIG.RELAY_WORKER_MODEL || 'fake-model';
       // Deterministic simulation
       await new Promise(r => setTimeout(r, Math.floor(Math.random() * 50) + 30));
       const promptStr = JSON.stringify(req.messages);
       const tokens_in = Math.ceil(promptStr.length / 4) + 50;
       const tokens_out = 180;
       const ms = Date.now() - startTs;
-      const cost_usd = calculateLlmCost(model, tokens_in, tokens_out);
+      const cost_usd = calculateLlmCost(fakeModel, tokens_in, tokens_out);
 
       const result = generateDeterministicResponse(req.schema, promptStr);
 
       repo.recordLlmCall({
         job_id: req.jobId,
         task_id: req.taskId,
-        model: `fake-${model}`,
+        model: `fake-${fakeModel}`,
         tokens_in,
         tokens_out,
         ms,
@@ -134,7 +138,123 @@ export async function proxyLlmCall(
       return { result, tokens_in, tokens_out, cost_usd, ms };
     }
 
-    // Live Anthropic Call
+    // 1. Live Google Gemini Call
+    if (hasGemini) {
+      let model = req.model;
+      if (!model || model.startsWith('claude')) {
+        model = process.env.RELAY_WORKER_MODEL && !process.env.RELAY_WORKER_MODEL.startsWith('claude')
+          ? process.env.RELAY_WORKER_MODEL
+          : 'gemini-2.0-flash';
+      }
+
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+      let systemPrompt = req.system || '';
+      if (req.schema) {
+        systemPrompt += `\nYou MUST output strictly valid JSON conforming to this schema:\n${JSON.stringify(req.schema, null, 2)}`;
+      }
+
+      const generationConfig: Record<string, any> = {
+        maxOutputTokens: req.maxTokens || 2048,
+        temperature: 0.2,
+      };
+      if (req.schema) {
+        generationConfig.responseMimeType = 'application/json';
+      }
+
+      const geminiModel = genAI.getGenerativeModel({
+        model,
+        systemInstruction: systemPrompt || undefined,
+        generationConfig,
+      });
+
+      const geminiContents = req.messages
+        .filter(m => m.role !== 'system')
+        .map(m => {
+          const role = m.role === 'assistant' ? 'model' : 'user';
+          const parts: any[] = [];
+          if (typeof m.content === 'string') {
+            parts.push({ text: m.content });
+          } else if (Array.isArray(m.content)) {
+            for (const item of m.content) {
+              if (item.type === 'text') {
+                parts.push({ text: item.text });
+              } else if (item.type === 'image') {
+                parts.push({
+                  inlineData: {
+                    mimeType: item.source.media_type,
+                    data: item.source.data,
+                  },
+                });
+              }
+            }
+          }
+          return { role, parts };
+        });
+
+      if (geminiContents.length === 0) {
+        geminiContents.push({ role: 'user', parts: [{ text: 'Execute the assigned task.' }] });
+      }
+
+      let response: any = null;
+      let lastError: any = null;
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          response = await geminiModel.generateContent({ contents: geminiContents });
+          break;
+        } catch (err: any) {
+          lastError = err;
+          const status = err.status || err.statusCode;
+          const msg = err.message || '';
+          if (status === 429 || msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')) {
+            const delay = Math.pow(2, attempt) * 1500;
+            await new Promise(r => setTimeout(r, delay));
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      if (!response) {
+        throw lastError || new Error('Gemini request failed after retries');
+      }
+
+      const ms = Date.now() - startTs;
+      const promptTokens = response.response.usageMetadata?.promptTokenCount;
+      const candTokens = response.response.usageMetadata?.candidatesTokenCount;
+      const tokens_in = typeof promptTokens === 'number' ? promptTokens : Math.ceil(JSON.stringify(req.messages).length / 4);
+      const tokens_out = typeof candTokens === 'number' ? candTokens : 180;
+      const cost_usd = calculateLlmCost(model, tokens_in, tokens_out);
+
+      let result: any = null;
+      const text = response.response.text();
+      if (req.schema) {
+        try {
+          const cleaned = text.replace(/^```json\n?|\n?```$/g, '').trim();
+          result = JSON.parse(cleaned);
+        } catch {
+          result = { raw: text };
+        }
+      } else {
+        result = text;
+      }
+
+      repo.recordLlmCall({
+        job_id: req.jobId,
+        task_id: req.taskId,
+        model,
+        tokens_in,
+        tokens_out,
+        ms,
+        ok: true,
+        ts: Date.now(),
+      });
+
+      return { result, tokens_in, tokens_out, cost_usd, ms };
+    }
+
+    // 2. Live Anthropic Call
+    const model = req.model || CONFIG.RELAY_WORKER_MODEL || 'claude-haiku-5-5';
     const anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     });

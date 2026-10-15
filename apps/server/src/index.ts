@@ -1,9 +1,23 @@
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
-import fastifyStatic from '@fastify/static';
+import dotenv from 'dotenv';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+
+dotenv.config();
+[
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(process.cwd(), '..', '.env'),
+  path.resolve(process.cwd(), '..', '..', '.env'),
+  path.resolve(process.cwd(), 'apps', 'server', '.env'),
+].forEach(envPath => {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+  }
+});
+
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
 import { createDatabaseAdapter } from './db/adapter.js';
 import { initializeDatabase } from './db/schema.js';
 import { Repository } from './db/repo.js';

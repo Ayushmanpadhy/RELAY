@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
   type Manifest,
   type Plan,
@@ -245,12 +246,96 @@ export function generateFakePlan(brief: string, manifest: Manifest, answers?: st
 }
 
 export async function generatePlan(brief: string, manifest: Manifest, answers?: string[]): Promise<Plan> {
-  const useFake = process.env.RELAY_FAKE_LLM === '1' || !process.env.ANTHROPIC_API_KEY;
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY);
+  const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY);
+  const useFake = process.env.RELAY_FAKE_LLM === '1' || (!hasGemini && !hasAnthropic);
 
   if (useFake) {
     return generateFakePlan(brief, manifest, answers);
   }
 
+  const userContent = JSON.stringify({
+    brief,
+    manifestSummary: manifest.summary,
+    totalFiles: manifest.totalFiles,
+    totalEstTokens: manifest.totalEstTokens,
+    filePreviews: manifest.files.slice(0, 10).map(f => ({
+      name: f.name,
+      mime: f.mime,
+      bytes: f.bytes,
+      rows: f.rows,
+      pages: f.pages,
+      preview: f.textPreview.slice(0, 300),
+    })),
+    userAnswers: answers || [],
+  }, null, 2);
+
+  // 1. Google Gemini Planner
+  if (hasGemini) {
+    const modelName = process.env.RELAY_PLANNER_MODEL && !process.env.RELAY_PLANNER_MODEL.startsWith('claude')
+      ? process.env.RELAY_PLANNER_MODEL
+      : 'gemini-2.0-flash';
+
+    const systemPrompt = `You are Relay's Distributed AI Task Planner.
+Given a user's brief and a manifest of uploaded files, design an optimal distributed execution plan.
+
+Rules:
+1. Strategy must be one of: "per_file", "chunk_text", "chunk_rows", "page_groups", "single".
+2. Map operation op must be "llm" or "tool".
+   If op is "tool", tool MUST be one of:
+   ['image_resize', 'image_convert', 'csv_clean', 'csv_stats', 'text_extract', 'hash_files', 'json_to_csv', 'regex_extract', 'translate', 'summarize', 'extract_fields', 'classify']
+3. Reduce op must be one of: "concat", "merge_json", "table_union", "llm_synthesis".
+4. Deliverable format must be one of: "md", "docx", "xlsx", "csv", "json", "zip".
+5. Never write or propose raw code execution.
+6. If the brief is clear, questions should be empty []. At most ask 1-3 questions only if truly ambiguous.
+7. Return strictly a JSON object conforming to this schema:
+{
+  "userSummary": "Plain words explanation shown to user (2-4 sentences)",
+  "understanding": "One sentence of what the user wants",
+  "strategy": "per_file" | "chunk_text" | "chunk_rows" | "page_groups" | "single",
+  "chunking": { "unit": "file" | "tokens" | "rows" | "pages", "target": number },
+  "map": { "op": "llm" | "tool", "tool": "optional_tool_name", "instruction": "string", "outputSchema": { "type": "object", "properties": {} } },
+  "reduce": { "op": "concat" | "merge_json" | "table_union" | "llm_synthesis", "instruction": "string", "fanIn": 20 },
+  "deliverable": { "format": "md" | "docx" | "xlsx" | "csv" | "json" | "zip", "filename": "string", "description": "string" },
+  "assumptions": ["string"],
+  "questions": [],
+  "risks": []
+}`;
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+    const gemini = genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction: systemPrompt,
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.2,
+      },
+    });
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const prompt = attempt === 0
+          ? userContent
+          : `${userContent}\n\nNote: Ensure the output strictly conforms to the JSON Plan schema with all required fields (userSummary, understanding, strategy, chunking, map, reduce, deliverable, assumptions, questions, risks).`;
+        const res = await gemini.generateContent(prompt);
+        const text = res.response.text();
+        const cleaned = text.replace(/^```json\n?|\n?```$/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+        const validated = PlanSchema.safeParse(parsed);
+        if (validated.success) {
+          return validated.data as Plan;
+        }
+        console.warn(`[Planner] Gemini plan validation issue:`, validated.error.issues);
+      } catch (err: any) {
+        console.warn(`[Planner] Gemini planning attempt ${attempt + 1} error:`, err.message);
+      }
+    }
+
+    console.warn('[Planner] Gemini planning failed; falling back to deterministic plan');
+    return generateFakePlan(brief, manifest, answers);
+  }
+
+  // 2. Anthropic Claude Planner
   const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
@@ -270,22 +355,6 @@ Rules:
 5. Never write or propose raw code execution.
 6. If the brief is clear, questions should be empty []. At most ask 1-3 questions only if truly ambiguous.
 7. Return strictly valid JSON conforming to the plan tool schema.`;
-
-  const userContent = JSON.stringify({
-    brief,
-    manifestSummary: manifest.summary,
-    totalFiles: manifest.totalFiles,
-    totalEstTokens: manifest.totalEstTokens,
-    filePreviews: manifest.files.slice(0, 10).map(f => ({
-      name: f.name,
-      mime: f.mime,
-      bytes: f.bytes,
-      rows: f.rows,
-      pages: f.pages,
-      preview: f.textPreview.slice(0, 300),
-    })),
-    userAnswers: answers || [],
-  }, null, 2);
 
   const planToolDef: Anthropic.Tool = {
     name: 'submit_plan',

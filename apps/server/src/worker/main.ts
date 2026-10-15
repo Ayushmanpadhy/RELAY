@@ -17,11 +17,11 @@ const getArg = (name: string): string | undefined => {
   return found ? found.slice(prefix.length) : undefined;
 };
 
-const coordinatorUrl = process.env.COORDINATOR_URL || getArg('coordinator') || 'http://127.0.0.1:4000';
-const workerName = process.env.WORKER_NAME || getArg('name') || `worker-${Math.floor(Math.random() * 9000 + 1000)}`;
-const isManaged = process.env.WORKER_MANAGED === '1' || getArg('managed') === 'true';
+const coordinatorUrl = getArg('coordinator') || process.env.COORDINATOR_URL || 'http://127.0.0.1:4000';
+const workerName = getArg('name') || process.env.WORKER_NAME || `worker-${Math.floor(Math.random() * 9000 + 1000)}`;
+const isManaged = getArg('managed') === 'true' || process.env.WORKER_MANAGED === '1';
 
-let workerId: string = process.env.WORKER_ID || getArg('id') || `w_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+let workerId: string = getArg('id') || process.env.WORKER_ID || `w_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 let slowFactor = 1.0;
 let isStopping = false;
 let currentTaskId: string | null = null;
