@@ -27,7 +27,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));
-    const message = errorBody?.error?.message || errorBody?.error || `HTTP ${res.status}`;
+    const message = errorBody?.error?.message || errorBody?.message || errorBody?.error || `HTTP ${res.status}`;
     throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
   }
 

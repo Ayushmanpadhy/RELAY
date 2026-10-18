@@ -119,19 +119,9 @@ export function initializeDatabase(db: DatabaseAdapter): void {
       level TEXT NOT NULL,
       message TEXT NOT NULL
     );
-
-    CREATE INDEX IF NOT EXISTS idx_tasks_claim ON tasks(status, priority DESC, available_at, created_at);
-    CREATE INDEX IF NOT EXISTS idx_tasks_job_stage ON tasks(job_id, stage_idx, status);
-    CREATE INDEX IF NOT EXISTS idx_tasks_job_id ON tasks(job_id);
-    CREATE INDEX IF NOT EXISTS idx_tasks_worker_id ON tasks(worker_id);
-    CREATE INDEX IF NOT EXISTS idx_attempts_task_id ON attempts(task_id);
-    CREATE INDEX IF NOT EXISTS idx_stages_job ON stages(job_id, idx);
-    CREATE INDEX IF NOT EXISTS idx_llm_calls_job ON llm_calls(job_id);
-    CREATE INDEX IF NOT EXISTS idx_plans_job ON plans(job_id);
-    CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
   `);
 
-  // Safe migration for existing SQLite databases
+  // Safe migration for existing SQLite databases before indexes are created
   try {
     const jobCols = new Set(db.prepare('PRAGMA table_info(jobs)').all<{ name: string }>().map((c: any) => c.name));
     if (!jobCols.has('brief')) db.exec('ALTER TABLE jobs ADD COLUMN brief TEXT');
@@ -152,7 +142,20 @@ export function initializeDatabase(db: DatabaseAdapter): void {
     if (!taskCols.has('tokens_in')) db.exec('ALTER TABLE tasks ADD COLUMN tokens_in INTEGER DEFAULT 0');
     if (!taskCols.has('tokens_out')) db.exec('ALTER TABLE tasks ADD COLUMN tokens_out INTEGER DEFAULT 0');
     if (!taskCols.has('needs_review')) db.exec('ALTER TABLE tasks ADD COLUMN needs_review INTEGER DEFAULT 0');
-  } catch {
-    // Columns already present or table newly created
+  } catch (err: any) {
+    console.warn('[DB Migration Warning]:', err.message);
   }
+
+  // Create indexes after ensuring columns exist
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_tasks_claim ON tasks(status, priority DESC, available_at, created_at);
+    CREATE INDEX IF NOT EXISTS idx_tasks_job_stage ON tasks(job_id, stage_idx, status);
+    CREATE INDEX IF NOT EXISTS idx_tasks_job_id ON tasks(job_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_worker_id ON tasks(worker_id);
+    CREATE INDEX IF NOT EXISTS idx_attempts_task_id ON attempts(task_id);
+    CREATE INDEX IF NOT EXISTS idx_stages_job ON stages(job_id, idx);
+    CREATE INDEX IF NOT EXISTS idx_llm_calls_job ON llm_calls(job_id);
+    CREATE INDEX IF NOT EXISTS idx_plans_job ON plans(job_id);
+    CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
+  `);
 }

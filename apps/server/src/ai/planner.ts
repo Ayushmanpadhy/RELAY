@@ -303,35 +303,41 @@ Rules:
 }`;
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    const gemini = genAI.getGenerativeModel({
-      model: modelName,
-      systemInstruction: systemPrompt,
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.2,
-      },
-    });
+    const modelsToTry = [modelName];
+    if (modelName === 'gemini-3.6-flash') modelsToTry.push('gemini-3.8-flash');
+    else if (modelName === 'gemini-3.8-flash') modelsToTry.push('gemini-3.6-flash');
 
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const prompt = attempt === 0
-          ? userContent
-          : `${userContent}\n\nNote: Ensure the output strictly conforms to the JSON Plan schema with all required fields (userSummary, understanding, strategy, chunking, map, reduce, deliverable, assumptions, questions, risks).`;
-        const res = await gemini.generateContent(prompt);
-        const text = res.response.text();
-        const cleaned = text.replace(/^```json\n?|\n?```$/g, '').trim();
-        const parsed = JSON.parse(cleaned);
-        const validated = PlanSchema.safeParse(parsed);
-        if (validated.success) {
-          return validated.data as Plan;
+    for (const currentModel of modelsToTry) {
+      const gemini = genAI.getGenerativeModel({
+        model: currentModel,
+        systemInstruction: systemPrompt,
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.2,
+        },
+      });
+
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const prompt = attempt === 0
+            ? userContent
+            : `${userContent}\n\nNote: Ensure the output strictly conforms to the JSON Plan schema with all required fields (userSummary, understanding, strategy, chunking, map, reduce, deliverable, assumptions, questions, risks).`;
+          const res = await gemini.generateContent(prompt);
+          const text = res.response.text();
+          const cleaned = text.replace(/^```json\n?|\n?```$/g, '').trim();
+          const parsed = JSON.parse(cleaned);
+          const validated = PlanSchema.safeParse(parsed);
+          if (validated.success) {
+            return validated.data as Plan;
+          }
+          console.warn(`[Planner] Gemini (${currentModel}) plan validation issue:`, validated.error.issues);
+        } catch (err: any) {
+          console.warn(`[Planner] Gemini (${currentModel}) planning attempt ${attempt + 1} error:`, err.message);
         }
-        console.warn(`[Planner] Gemini plan validation issue:`, validated.error.issues);
-      } catch (err: any) {
-        console.warn(`[Planner] Gemini planning attempt ${attempt + 1} error:`, err.message);
       }
     }
 
-    console.warn('[Planner] Gemini planning failed; falling back to deterministic plan');
+    console.warn('[Planner] Gemini planning failed across models; falling back to deterministic plan');
     return generateFakePlan(brief, manifest, answers);
   }
 

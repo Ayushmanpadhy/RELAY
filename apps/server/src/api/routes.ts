@@ -315,100 +315,106 @@ export function registerRoutes(
 
   // 1. POST /api/requests (Upload + Brief -> Intake + Plan Draft)
   app.post('/api/requests', async (req: FastifyRequest, reply: FastifyReply) => {
-    const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const planId = `plan_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const uploadsDir = intakeManager.getUploadsDir(jobId);
+    try {
+      const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const planId = `plan_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const uploadsDir = intakeManager.getUploadsDir(jobId);
 
-    const uploadedFiles: Array<{ originalName: string; savedPath: string; mime: string; bytes: number }> = [];
-    let brief = '';
+      const uploadedFiles: Array<{ originalName: string; savedPath: string; mime: string; bytes: number }> = [];
+      let brief = '';
 
-    const contentType = req.headers['content-type'] || '';
+      const contentType = req.headers['content-type'] || '';
 
-    if (contentType.includes('multipart/form-data')) {
-      const parts = (req as any).parts();
-      for await (const part of parts) {
-        if (part.type === 'file') {
-          const safeName = path.basename(part.filename).replace(/[^a-zA-Z0-9._-]/g, '_');
-          const dest = path.join(uploadsDir, safeName);
-          await pipeline(part.file, fs.createWriteStream(dest));
-          const stat = fs.statSync(dest);
-          uploadedFiles.push({
-            originalName: part.filename,
-            savedPath: dest,
-            mime: part.mimetype || 'application/octet-stream',
-            bytes: stat.size,
-          });
-        } else {
-          if (part.fieldname === 'brief') {
-            brief = String(part.value || '');
+      if (contentType.includes('multipart/form-data')) {
+        const parts = (req as any).parts();
+        for await (const part of parts) {
+          if (part.type === 'file') {
+            const safeName = path.basename(part.filename).replace(/[^a-zA-Z0-9._-]/g, '_');
+            const dest = path.join(uploadsDir, safeName);
+            await pipeline(part.file, fs.createWriteStream(dest));
+            const stat = fs.statSync(dest);
+            uploadedFiles.push({
+              originalName: part.filename,
+              savedPath: dest,
+              mime: part.mimetype || 'application/octet-stream',
+              bytes: stat.size,
+            });
+          } else {
+            if (part.fieldname === 'brief') {
+              brief = String(part.value || '');
+            }
+          }
+        }
+      } else if (contentType.includes('application/json')) {
+        const body = req.body as any;
+        brief = body.brief || '';
+        if (Array.isArray(body.files)) {
+          for (let i = 0; i < body.files.length; i++) {
+            const f = body.files[i];
+            const filename = f.name || `file_${i}.txt`;
+            const dest = path.join(uploadsDir, filename);
+            const content = f.content || '';
+            fs.writeFileSync(dest, content, 'utf-8');
+            const stat = fs.statSync(dest);
+            uploadedFiles.push({
+              originalName: filename,
+              savedPath: dest,
+              mime: f.mime || 'text/plain',
+              bytes: stat.size,
+            });
           }
         }
       }
-    } else if (contentType.includes('application/json')) {
-      const body = req.body as any;
-      brief = body.brief || '';
-      if (Array.isArray(body.files)) {
-        for (let i = 0; i < body.files.length; i++) {
-          const f = body.files[i];
-          const filename = f.name || `file_${i}.txt`;
-          const dest = path.join(uploadsDir, filename);
-          const content = f.content || '';
-          fs.writeFileSync(dest, content, 'utf-8');
-          const stat = fs.statSync(dest);
-          uploadedFiles.push({
-            originalName: filename,
-            savedPath: dest,
-            mime: f.mime || 'text/plain',
-            bytes: stat.size,
-          });
-        }
+
+      if (!brief) {
+        brief = 'Process uploaded files';
       }
+
+      // Process intake
+      const manifest: Manifest = await intakeManager.processUploads(jobId, uploadedFiles);
+
+      // AI Planner
+      const plan = await generatePlan(brief, manifest);
+      const estimation = estimatePlan(plan, manifest);
+
+      // 1. Create preliminary job record (satisfies plans.job_id foreign key)
+      const job = repo.createJob(jobId, 'v3_pipeline', { brief, manifest }, 1, [], brief, planId);
+
+      // 2. Persist plan record
+      const planRecord = repo.createPlanRecord({
+        id: planId,
+        job_id: jobId,
+        brief,
+        manifest,
+        plan,
+        status: 'DRAFT',
+        est_cost: estimation.estCostUsd,
+        est_tasks: estimation.estTasks,
+        created_at: Date.now(),
+      });
+
+      const log = repo.recordEvent(
+        'info',
+        `Created request ${jobId}: ${manifest.summary}. Estimated ${estimation.estTasks} tasks ($${estimation.estCostUsd.toFixed(4)})`
+      );
+      sseBroker.broadcast({ type: 'job', data: job });
+      sseBroker.broadcast({ type: 'log', data: { ts: log.ts, level: log.level, message: log.message } });
+
+      return reply.status(201).send({
+        jobId,
+        planId,
+        manifest,
+        plan,
+        estCost: estimation.estCostUsd,
+        estTasks: estimation.estTasks,
+        planRecord,
+      });
+    } catch (err: any) {
+      console.error('[POST /api/requests error]:', err);
+      return reply.status(500).send({
+        error: err.message || 'Internal error while processing request and generating plan',
+      });
     }
-
-    if (!brief) {
-      brief = 'Process uploaded files';
-    }
-
-    // Process intake
-    const manifest: Manifest = await intakeManager.processUploads(jobId, uploadedFiles);
-
-    // AI Planner
-    const plan = await generatePlan(brief, manifest);
-    const estimation = estimatePlan(plan, manifest);
-
-    // Persist plan record
-    const planRecord = repo.createPlanRecord({
-      id: planId,
-      job_id: jobId,
-      brief,
-      manifest,
-      plan,
-      status: 'DRAFT',
-      est_cost: estimation.estCostUsd,
-      est_tasks: estimation.estTasks,
-      created_at: Date.now(),
-    });
-
-    // Create preliminary job record
-    const job = repo.createJob(jobId, 'v3_pipeline', { brief, manifest }, 1, []);
-    repo.updatePlan(planId, plan, 'DRAFT', estimation.estCostUsd, estimation.estTasks);
-
-    const log = repo.recordEvent(
-      'info',
-      `Created request ${jobId}: ${manifest.summary}. Estimated ${estimation.estTasks} tasks ($${estimation.estCostUsd.toFixed(4)})`
-    );
-    sseBroker.broadcast({ type: 'job', data: job });
-    sseBroker.broadcast({ type: 'log', data: { ts: log.ts, level: log.level, message: log.message } });
-
-    return reply.status(201).send({
-      jobId,
-      planId,
-      manifest,
-      plan,
-      estCost: estimation.estCostUsd,
-      estTasks: estimation.estTasks,
-      planRecord,
-    });
   });
 
   // 2. GET /api/requests/:id
