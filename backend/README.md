@@ -1,3 +1,2 @@
-# Relay Backend (v4)
-
-FastAPI distributed task platform backend.
+# Relay Backend
+Distributed AI Task Execution Platform
