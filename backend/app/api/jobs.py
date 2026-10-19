@@ -129,7 +129,7 @@ async def create_job(
         initial_label = "Waiting for clarification" if has_questions else "Working on it"
 
         # Step 3: Split into parts
-        parts = await split_job(job_id, plan, manifest)
+        parts = await split_job(job_id, plan, manifest, prompt=effective_prompt)
 
         # Step 4: Write records
         job_int = JobInternal(

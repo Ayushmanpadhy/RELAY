@@ -35,7 +35,7 @@ class Scheduler:
         self.instance_id: str = f"relay-node-{os.getpid()}-{uuid.uuid4().hex[:6]}"
         self.is_leader: bool = False
         self.active_jobs: dict[str, asyncio.Task[None]] = {}
-        self.global_semaphore = asyncio.Semaphore(settings.GLOBAL_CONCURRENCY)
+        self.global_semaphore = asyncio.Semaphore(100)
         self._lease_task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
@@ -219,6 +219,8 @@ class Scheduler:
                             # Exact tool execution
                             assert part.tool is not None
                             output_val = tools_registry.execute(part.tool, chunk, part.toolArgs)
+                            # Brief execution delay so node states are vividly visible on the live admin overview
+                            await asyncio.sleep(0.8)
                         else:
                             # AI part execution
                             delimiter = "===RELAY_DATA_START==="
@@ -322,9 +324,10 @@ Return strictly a valid JSON object matching the requested schema.
                 await set_part(job_id, part.partId, part.model_dump())
                 queue.task_done()
 
-        # Run concurrent workers across the pool
+        # Run concurrent workers across the pool (scales up to 100 nodes)
+        worker_count = max(10, min(total_parts, 100))
         worker_tasks = [
-            asyncio.create_task(worker_loop()) for _ in range(settings.GLOBAL_CONCURRENCY)
+            asyncio.create_task(worker_loop()) for _ in range(worker_count)
         ]
         await asyncio.gather(*worker_tasks)
 

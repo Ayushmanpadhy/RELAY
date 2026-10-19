@@ -425,9 +425,14 @@ async def get_job_internal(job_id: str) -> dict[str, Any] | None:
     return cast(dict[str, Any] | None, _in_memory_store.get("jobs_internal", {}).get(job_id))
 
 
+_last_fs_jobs_sync: float = 0.0
+
+
 async def get_all_jobs_internal(limit: int = 200) -> list[dict[str, Any]]:
+    global _last_fs_jobs_sync
     jobs_map: dict[str, dict[str, Any]] = dict(_in_memory_store.get("jobs_internal", {}))
-    if is_firestore_connected() and _db is not None:
+    now = time.time()
+    if is_firestore_connected() and _db is not None and (now - _last_fs_jobs_sync > 3.0 or not jobs_map):
         try:
             docs = (
                 _db.collection("jobs_internal")
@@ -442,12 +447,14 @@ async def get_all_jobs_internal(limit: int = 200) -> list[dict[str, Any]]:
                     jobs_map[j_id] = data
                 else:
                     jobs_map[j_id].update(data)
+            _last_fs_jobs_sync = now
         except Exception:
             _log_offline_suppressed("stream all jobs internal")
 
     all_jobs = list(jobs_map.values())
     all_jobs.sort(key=lambda j: j.get("createdAt", ""), reverse=True)
     return all_jobs[:limit]
+
 
 
 async def get_user_jobs_public(uid: str, limit: int = 100) -> list[dict[str, Any]]:

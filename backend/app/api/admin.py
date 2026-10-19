@@ -40,12 +40,8 @@ class UpdateSettingsRequest(BaseModel):
 
 @router.get("/overview")
 async def get_overview() -> dict[str, Any]:
-    nodes = await get_all_nodes()
-    # Compute node summary counts
-    node_counts = {"working": 0, "idle": 0, "crashed": 0, "recovering": 0}
-    for n in nodes:
-        st = n.get("state", "idle")
-        node_counts[st] = node_counts.get(st, 0) + 1
+    nodes = node_pool.get_all_states()
+    node_counts = node_pool.get_summary_counts()
 
     all_jobs = await get_all_jobs_internal(limit=200)
     active_jobs = sum(

@@ -367,5 +367,76 @@ class ToolsRegistry:
             merger=merge_concat_lists,
         )
 
+        # 11. count_range_matching
+        def exec_count_range_matching(lines: list[str], args: dict[str, Any]) -> int:
+            start = int(args.get("start", 1))
+            end = int(args.get("end", 1))
+            prefix = str(args.get("prefix", "")).strip()
+            suffix = str(args.get("suffix", "")).strip()
+
+            if start > end:
+                return 0
+
+            count = 0
+            s_len = len(str(start))
+            e_len = len(str(end))
+
+            for d in range(s_len, e_len + 1):
+                min_n = max(start, 10 ** (d - 1))
+                max_n = min(end, (10 ** d) - 1)
+                if min_n > max_n:
+                    continue
+
+                if d == 1:
+                    for n in range(min_n, max_n + 1):
+                        sn = str(n)
+                        if (not prefix or sn.startswith(prefix)) and (not suffix or sn.endswith(suffix)):
+                            count += 1
+                    continue
+
+                if prefix:
+                    if len(prefix) > d:
+                        continue
+                    p_val = int(prefix)
+                    pref_min = p_val * (10 ** (d - len(prefix)))
+                    pref_max = (p_val + 1) * (10 ** (d - len(prefix))) - 1
+                    cur_min = max(min_n, pref_min)
+                    cur_max = min(max_n, pref_max)
+                else:
+                    cur_min = min_n
+                    cur_max = max_n
+
+                if cur_min > cur_max:
+                    continue
+
+                if suffix:
+                    s_mod = 10 ** len(suffix)
+                    s_val = int(suffix)
+                    first = cur_min + (s_val - cur_min % s_mod) % s_mod
+                    if first <= cur_max:
+                        count += ((cur_max - first) // s_mod) + 1
+                else:
+                    count += (cur_max - cur_min + 1)
+
+            return count
+
+        self.register(
+            name="count_range_matching",
+            description="Count numbers in a range [start, end] starting with a prefix and/or ending with a suffix",
+            args_schema={
+                "type": "object",
+                "properties": {
+                    "start": {"type": "integer"},
+                    "end": {"type": "integer"},
+                    "prefix": {"type": "string"},
+                    "suffix": {"type": "string"},
+                },
+                "required": ["start", "end"],
+            },
+            executor=exec_count_range_matching,
+            merger=merge_sum,
+        )
+
 
 tools_registry = ToolsRegistry()
+

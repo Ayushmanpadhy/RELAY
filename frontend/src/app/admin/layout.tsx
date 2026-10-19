@@ -87,20 +87,23 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </Suspense>
         </div>
 
-        {/* User footer & sign out */}
-        <div className="p-4 border-t border-[var(--line)] flex items-center justify-between">
+        {/* Admin profile footer & sign out */}
+        <div className="p-4 border-t border-[var(--line)] flex items-center justify-between bg-[var(--surface-2)]/30">
           <div className="truncate mr-2">
-            <p className="text-xs font-semibold text-[var(--text)] truncate" suppressHydrationWarning>
-              {user?.displayName || "Admin Operator"}
-            </p>
-            <p className="text-[11px] text-[var(--dim)] truncate font-mono" suppressHydrationWarning>
-              {user?.email || "admin@gmail.com"}
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[var(--ok)] shadow-[0_0_6px_var(--ok)]" />
+              <p className="text-xs font-bold text-[var(--text)] tracking-tight">
+                System Administrator
+              </p>
+            </div>
+            <p className="text-[11px] text-[var(--dim)] font-mono truncate mt-0.5 font-medium">
+              admin@relay.platform
             </p>
           </div>
           <button
             onClick={handleSignOut}
-            title="Sign out"
-            className="p-2 rounded-lg bg-[var(--surface-2)] hover:bg-[rgba(255,107,107,0.15)] text-[var(--dim)] hover:text-[var(--bad)] transition-colors"
+            title="Sign out of Admin Console"
+            className="p-2 rounded-lg bg-[var(--surface)] hover:bg-[rgba(255,107,107,0.15)] text-[var(--dim)] hover:text-[var(--bad)] transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
           </button>
