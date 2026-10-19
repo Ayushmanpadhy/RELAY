@@ -141,13 +141,14 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "Security violation: ADMIN_PASSWORD must be changed from the default password in production environment."
                 )
-            cred_path = Path(self.GOOGLE_APPLICATION_CREDENTIALS)
-            if not cred_path.is_absolute():
-                cred_path = Path(__file__).parent.parent / cred_path
-            if not cred_path.exists():
-                raise ValueError(
-                    f"Configuration Error: Missing Firebase service account credentials file at {cred_path}"
-                )
+            if not self.FIREBASE_SERVICE_ACCOUNT_JSON or not self.FIREBASE_SERVICE_ACCOUNT_JSON.strip():
+                cred_path = Path(self.GOOGLE_APPLICATION_CREDENTIALS)
+                if not cred_path.is_absolute():
+                    cred_path = Path(__file__).parent.parent / cred_path
+                if not cred_path.exists():
+                    raise ValueError(
+                        f"Configuration Error: Missing Firebase service account credentials file at {cred_path}"
+                    )
             if "ENABLE_CHAOS" not in self.model_fields_set:
                 self.ENABLE_CHAOS = 0
 

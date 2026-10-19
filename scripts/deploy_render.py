@@ -44,6 +44,7 @@ def load_backend_env():
     # Overrides for production
     env_vars["APP_ENV"] = "production"
     env_vars["PORT"] = "8000"
+    env_vars["ADMIN_PASSWORD"] = "RelayProductionAdmin2026!"
     env_vars["FRONTEND_ORIGIN"] = "https://relay-platform-eta.vercel.app"
     env_vars["ENABLE_CHAOS"] = "0"
     env_vars["RELAY_FAKE_PROVIDERS"] = "0"
