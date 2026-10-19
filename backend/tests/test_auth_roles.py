@@ -60,3 +60,35 @@ async def test_auth_dev_tokens_rejected_in_production(monkeypatch):
         res = await client.get("/api/admin/overview", headers=headers)
         assert res.status_code == 401
         assert res.json()["detail"]["error"]["code"] == "invalid_token"
+
+
+@pytest.mark.asyncio
+async def test_admin_auth_login_isolated():
+    """Verify dedicated admin login endpoint and HMAC admin token work in both dev and production."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Invalid credentials
+        res_bad = await client.post(
+            "/api/admin/auth/login",
+            json={"email": "admin@gmail.com", "password": "wrongpassword"},
+        )
+        assert res_bad.status_code == 401
+        assert res_bad.json()["detail"]["error"]["code"] == "invalid_credentials"
+
+        # Valid credentials
+        res_good = await client.post(
+            "/api/admin/auth/login",
+            json={"email": "admin@gmail.com", "password": settings.ADMIN_PASSWORD},
+        )
+        assert res_good.status_code == 200
+        data = res_good.json()
+        assert data["status"] == "ok"
+        token = data["token"]
+        assert token.startswith("relay-adm.")
+
+        # Access admin endpoint with this isolated token
+        res_admin = await client.get(
+            "/api/admin/overview", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert res_admin.status_code == 200
+        assert "nodes" in res_admin.json()
+

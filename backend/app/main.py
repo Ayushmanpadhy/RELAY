@@ -108,6 +108,7 @@ app.add_middleware(
 # Mount API routers
 app.include_router(health.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
+app.include_router(admin.auth_router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 
 

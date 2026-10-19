@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useAdminAuth } from "@/context/AdminAuthContext";
 import { fetchWithAuth } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -25,7 +25,7 @@ interface OverviewData {
 }
 
 export default function AdminOverviewPage() {
-  const { token } = useAuth();
+  const { token } = useAdminAuth();
   const [selectedNode, setSelectedNode] = useState<NodeRecord | null>(null);
 
   // Poll overview data every 1 second for live real-time updates

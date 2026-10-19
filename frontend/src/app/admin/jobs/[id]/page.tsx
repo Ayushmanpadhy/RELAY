@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useAuth } from "@/context/AuthContext";
+import { useAdminAuth } from "@/context/AdminAuthContext";
 import { fetchWithAuth } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -21,7 +21,7 @@ interface JobDetailResponse {
 export default function AdminJobDetailPage() {
   const params = useParams();
   const jobId = params?.id as string;
-  const { token } = useAuth();
+  const { token } = useAdminAuth();
   const [expandedPartId, setExpandedPartId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"plan" | "parts" | "outputs" | "result">("parts");
 

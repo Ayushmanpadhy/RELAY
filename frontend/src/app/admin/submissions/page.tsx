@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
+import { useAdminAuth } from "@/context/AdminAuthContext";
 import { fetchWithAuth } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Search, ExternalLink } from "lucide-react";
@@ -10,7 +10,7 @@ import { JobRecord } from "@/lib/types";
 
 export default function AdminSubmissionsPage() {
   const router = useRouter();
-  const { token } = useAuth();
+  const { token } = useAdminAuth();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 

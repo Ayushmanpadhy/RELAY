@@ -3,7 +3,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
-from app.auth import AuthUser, require_admin
+from app.auth import AuthUser, create_admin_token, require_admin
 from app.config import settings
 from app.nodes.chaos import crash_node, crash_provider, heal_all
 from app.nodes.pool import node_pool
@@ -19,6 +19,41 @@ from app.store.firestore import (
     log_event,
     update_settings,
 )
+
+auth_router = APIRouter(prefix="/admin/auth", tags=["Admin Auth"])
+
+
+class AdminLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@auth_router.post("/login")
+async def api_admin_login(body: AdminLoginRequest) -> dict[str, Any]:
+    admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAIL.split(",") if e.strip()}
+    admin_emails.add("admin@gmail.com")
+    admin_emails.add("admin@relay.platform")
+
+    input_email = body.email.strip().lower()
+    if input_email not in admin_emails or body.password != settings.ADMIN_PASSWORD:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error": {
+                    "code": "invalid_credentials",
+                    "message": "Invalid administrator email or password.",
+                }
+            },
+        )
+
+    token = create_admin_token(input_email)
+    return {
+        "status": "ok",
+        "token": token,
+        "email": input_email,
+        "role": "admin",
+    }
+
 
 router = APIRouter(prefix="/admin", tags=["Admin"], dependencies=[Depends(require_admin)])
 

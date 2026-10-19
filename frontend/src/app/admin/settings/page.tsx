@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useAdminAuth } from "@/context/AdminAuthContext";
 import { fetchWithAuth } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Save, CheckCircle2, RotateCw } from "lucide-react";
@@ -14,7 +14,7 @@ interface RuntimeSettings {
 }
 
 export default function AdminSettingsPage() {
-  const { token } = useAuth();
+  const { token } = useAdminAuth();
   const [callMode, setCallMode] = useState("batched");
   const [concurrency, setConcurrency] = useState(10);
   const [maxAttempts, setMaxAttempts] = useState(4);

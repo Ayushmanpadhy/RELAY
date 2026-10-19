@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, Suspense } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
+import { AdminAuthProvider, useAdminAuth } from "@/context/AdminAuthContext";
 import {
   LayoutDashboard,
   Layers,
@@ -51,10 +51,10 @@ function AdminNav() {
   );
 }
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { user, isAdmin, loading, signInWithEmail, signOut } = useAuth();
-  const [adminEmail, setAdminEmail] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
+function AdminLayoutContent({ children }: { children: React.ReactNode }) {
+  const { adminEmail, isAdmin, loading, login, logout } = useAdminAuth();
+  const [emailInput, setEmailInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
   const [authError, setAuthError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -62,16 +62,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     document.documentElement.setAttribute("data-theme", "dark");
   }, []);
 
-  const handleSignOut = async () => {
-    await signOut();
-  };
-
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
     setIsSubmitting(true);
     try {
-      await signInWithEmail(adminEmail.trim(), adminPassword);
+      await login(emailInput.trim(), passwordInput);
     } catch (err: unknown) {
       setAuthError(
         err instanceof Error
@@ -109,28 +105,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
             <h1 className="text-xl font-bold tracking-tight">Private Administrator Console</h1>
             <p className="text-xs text-[var(--dim)] mt-1.5 leading-relaxed">
-              Restricted access. Authorized system operators only. Please enter the administrator email and password to proceed.
+              Restricted access. Authorized system operators only. Enter the administrator credentials to unlock.
             </p>
           </div>
 
           {authError && (
             <div className="mb-4 p-3 rounded-xl bg-[rgba(255,107,107,0.1)] border border-[var(--bad)] text-[var(--bad)] text-xs font-mono">
               {authError}
-            </div>
-          )}
-
-          {user && (
-            <div className="mb-4 p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs text-[var(--dim)] flex items-center justify-between">
-              <div className="truncate mr-2">
-                Signed in as <strong className="text-[var(--text)]">{user.email}</strong> (User Account).
-              </div>
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="text-[11px] font-mono text-[var(--accent)] hover:underline shrink-0"
-              >
-                Sign out
-              </button>
             </div>
           )}
 
@@ -142,8 +123,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <input
                 type="email"
                 required
-                value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
                 placeholder="admin@gmail.com"
                 className="w-full bg-[var(--surface-2)] border border-[var(--line)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-colors font-mono"
               />
@@ -156,8 +137,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <input
                 type="password"
                 required
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
                 placeholder="••••••••••••"
                 className="w-full bg-[var(--surface-2)] border border-[var(--line)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-colors font-mono"
               />
@@ -213,11 +194,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </p>
             </div>
             <p className="text-[11px] text-[var(--dim)] font-mono truncate mt-0.5 font-medium">
-              admin@relay.platform
+              {adminEmail || "admin@relay.platform"}
             </p>
           </div>
           <button
-            onClick={handleSignOut}
+            onClick={logout}
             title="Sign out of Admin Console"
             className="p-2 rounded-lg bg-[var(--surface)] hover:bg-[rgba(255,107,107,0.15)] text-[var(--dim)] hover:text-[var(--bad)] transition-colors cursor-pointer"
           >
@@ -251,3 +232,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   );
 }
 
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AdminAuthProvider>
+      <AdminLayoutContent>{children}</AdminLayoutContent>
+    </AdminAuthProvider>
+  );
+}

@@ -24,7 +24,7 @@ interface UserProfileModalProps {
 }
 
 export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
-  const { user, isAdmin, signOut, updateDisplayName } = useAuth();
+  const { user, signOut, updateDisplayName } = useAuth();
   const [activeTab, setActiveTab] = useState<"profile" | "preferences">("profile");
   const [displayNameInput, setDisplayNameInput] = useState(user?.displayName || "");
   const [isEditingName, setIsEditingName] = useState(false);
@@ -155,15 +155,9 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                     <h3 className="text-base font-semibold text-[var(--text)] truncate">
                       {user?.displayName || "Unnamed User"}
                     </h3>
-                    {isAdmin ? (
-                      <span className="px-2 py-0.5 rounded-full bg-[rgba(91,108,255,0.15)] text-[var(--accent)] text-[10px] font-bold uppercase tracking-wider">
-                        Admin
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded-full bg-[rgba(74,222,154,0.15)] text-[var(--ok)] text-[10px] font-bold uppercase tracking-wider">
-                        User
-                      </span>
-                    )}
+                    <span className="px-2 py-0.5 rounded-full bg-[rgba(74,222,154,0.15)] text-[var(--ok)] text-[10px] font-bold uppercase tracking-wider">
+                      User
+                    </span>
                   </div>
                   <p className="text-xs text-[var(--dim)] truncate flex items-center gap-1.5 mt-0.5">
                     <Mail className="w-3.5 h-3.5 text-[var(--dim)]" />
@@ -249,27 +243,6 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                   </button>
                 </div>
               </div>
-
-              {/* Admin Link if Admin */}
-              {isAdmin && (
-                <div className="p-4 rounded-2xl bg-[rgba(91,108,255,0.06)] border border-[rgba(91,108,255,0.2)] flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <ShieldCheck className="w-5 h-5 text-[var(--accent)]" />
-                    <div>
-                      <p className="text-xs font-semibold text-[var(--text)]">Admin Console Privileges</p>
-                      <p className="text-[11px] text-[var(--dim)]">Access nodes, telemetry and system settings</p>
-                    </div>
-                  </div>
-                  <Link
-                    href="/admin"
-                    onClick={onClose}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent)] hover:underline"
-                  >
-                    <span>Open Dashboard</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </Link>
-                </div>
-              )}
             </div>
           )}
 

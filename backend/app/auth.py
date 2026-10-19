@@ -1,4 +1,9 @@
+import base64
+import hashlib
+import hmac
+import json
 import logging
+import time
 from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Security, status
@@ -11,6 +16,79 @@ from app.config import settings
 logger = logging.getLogger("relay.auth")
 security = HTTPBearer(auto_error=False)
 
+ADMIN_TOKEN_PREFIX = "relay-adm."
+
+
+def get_admin_secret() -> bytes:
+    salt = settings.FIREBASE_PROJECT_ID or "relay-production-salt"
+    return hashlib.sha256(f"{settings.ADMIN_PASSWORD}:{salt}".encode("utf-8")).digest()
+
+
+def create_admin_token(email: str, expires_in_seconds: int = 7 * 86400) -> str:
+    now = int(time.time())
+    payload = {
+        "sub": "admin-system",
+        "email": email.strip().lower(),
+        "role": "admin",
+        "iat": now,
+        "exp": now + expires_in_seconds,
+    }
+    payload_json = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    payload_b64 = base64.urlsafe_b64encode(payload_json).decode("utf-8").rstrip("=")
+
+    secret = get_admin_secret()
+    sig = hmac.new(secret, payload_b64.encode("utf-8"), hashlib.sha256).digest()
+    sig_b64 = base64.urlsafe_b64encode(sig).decode("utf-8").rstrip("=")
+
+    return f"{ADMIN_TOKEN_PREFIX}{payload_b64}.{sig_b64}"
+
+
+def verify_admin_token(token: str) -> "AuthUser | None":
+    if not token or not token.startswith(ADMIN_TOKEN_PREFIX):
+        return None
+    raw = token[len(ADMIN_TOKEN_PREFIX) :]
+    parts = raw.split(".")
+    if len(parts) != 2:
+        return None
+    payload_b64, sig_b64 = parts
+
+    secret = get_admin_secret()
+    expected_sig = hmac.new(secret, payload_b64.encode("utf-8"), hashlib.sha256).digest()
+
+    rem = len(sig_b64) % 4
+    padded_sig_b64 = sig_b64 + ("=" * (4 - rem) if rem else "")
+    try:
+        actual_sig = base64.urlsafe_b64decode(padded_sig_b64)
+    except Exception:
+        return None
+
+    if not hmac.compare_digest(expected_sig, actual_sig):
+        return None
+
+    rem = len(payload_b64) % 4
+    padded_payload_b64 = payload_b64 + ("=" * (4 - rem) if rem else "")
+    try:
+        payload_json = base64.urlsafe_b64decode(padded_payload_b64).decode("utf-8")
+        payload = json.loads(payload_json)
+    except Exception:
+        return None
+
+    if payload.get("exp", 0) < int(time.time()):
+        logger.warning("Admin token expired")
+        return None
+
+    if payload.get("role") != "admin":
+        return None
+
+    email = payload.get("email", settings.ADMIN_EMAIL)
+    return AuthUser(
+        uid="admin-system",
+        email=email,
+        name="System Administrator",
+        is_admin=True,
+        claims={"admin": True, "role": "admin"},
+    )
+
 
 class AuthUser(BaseModel):
     uid: str
@@ -21,7 +99,12 @@ class AuthUser(BaseModel):
 
 
 def verify_token_string(token: str) -> AuthUser:
-    # Development fallback tokens only allowed in non-production environments
+    # 1. Isolated Admin Token (HMAC-SHA256)
+    admin_user = verify_admin_token(token)
+    if admin_user:
+        return admin_user
+
+    # 2. Development fallback tokens only allowed in non-production environments
     if settings.APP_ENV != "production":
         if token == "dev-admin-token":
             return AuthUser(

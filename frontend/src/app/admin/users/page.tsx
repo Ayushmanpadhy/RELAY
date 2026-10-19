@@ -1,14 +1,14 @@
 "use client";
 
 import React from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useAdminAuth } from "@/context/AdminAuthContext";
 import { fetchWithAuth } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { User } from "lucide-react";
 import { UserRecord } from "@/lib/types";
 
 export default function AdminUsersPage() {
-  const { token } = useAuth();
+  const { token } = useAdminAuth();
 
   const { data: users = [] } = useQuery<UserRecord[]>({
     queryKey: ["adminUsers", token],

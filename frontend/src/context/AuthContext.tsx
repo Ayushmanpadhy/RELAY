@@ -60,14 +60,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Check saved dev token in localStorage on mount (client-only, post-hydration)
     const savedDevToken = typeof window !== "undefined" ? localStorage.getItem("relay_dev_token") : null;
     if (savedDevToken === "dev-admin-token") {
-      setToken("dev-admin-token");
-      setIsAdmin(true);
-      setUser({
-        uid: "dev-admin-uid",
-        email: "admin@gmail.com",
-        displayName: "Admin Dev",
-      } as User);
-      setLoading(false);
+      // Clean up legacy admin dev token from user context
+      localStorage.removeItem("relay_dev_token");
     } else if (savedDevToken && savedDevToken.startsWith("dev-user-")) {
       const uid = savedDevToken.replace("dev-user-", "");
       setToken(savedDevToken);
@@ -87,11 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const idToken = await currentUser.getIdToken();
           const tokenResult = await currentUser.getIdTokenResult();
           setToken(idToken);
-          const adminClaim =
-            Boolean(tokenResult.claims.admin) ||
-            currentUser.email?.toLowerCase() === "admin@gmail.com";
-          setIsAdmin(adminClaim);
-
+          setIsAdmin(Boolean(tokenResult.claims.admin));
         } catch {
           setToken(null);
           setIsAdmin(false);
@@ -116,10 +106,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem("relay_dev_token");
       return cred.user;
     } catch (e: unknown) {
-      if (email === "admin@gmail.com" && pass === "admin123") {
-        devSignInAsAdmin();
-        return;
-      }
       throw e;
     }
   };
@@ -178,14 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const devSignInAsAdmin = () => {
-    localStorage.setItem("relay_dev_token", "dev-admin-token");
-    setIsAdmin(true);
-    setToken("dev-admin-token");
-    setUser({
-      uid: "dev-admin-uid",
-      email: "admin@gmail.com",
-      displayName: "Admin Dev",
-    } as User);
+    // Admin login is now strictly managed by AdminAuthContext
   };
 
   const devSignInAsUser = (name: string = "Ayush") => {

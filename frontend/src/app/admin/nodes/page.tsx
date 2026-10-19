@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useAdminAuth } from "@/context/AdminAuthContext";
 import { fetchWithAuth } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -15,7 +15,7 @@ interface ChaosOverview {
 }
 
 export default function AdminNodesChaosPage() {
-  const { token } = useAuth();
+  const { token } = useAdminAuth();
   const [targetNode, setTargetNode] = useState("node-005");
   const [targetProvider, setTargetProvider] = useState("groq");
   const [duration, setDuration] = useState(30);
