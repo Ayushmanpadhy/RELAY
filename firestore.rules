@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // User profile documents
+    match /users/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || request.auth.token.admin == true);
+      allow write: if false;
+    }
+
+    // Public user-safe job records
+    match /jobs/{jobId} {
+      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || request.auth.token.admin == true);
+      allow write: if false;
+    }
+
+    // All internal admin records: jobs_internal, parts, nodes, providers, events, settings
+    match /{path=**} {
+      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow write: if false;
+    }
+  }
+}

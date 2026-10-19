@@ -1,145 +1,185 @@
-# Deployment Guide: Relay Distributed Task Platform
+# Production Deployment & Operations Runbook: Relay v4
 
-This guide covers production deployment options for **Relay**. The system is packaged as a unified monorepo where the Fastify Coordinator serves both the API endpoints, Server-Sent Events (SSE), and the compiled React SPA web application, while managing child worker processes.
-
----
-
-## 1. Architecture Overview in Production
-
-```
-              Clients (Browser / API)
-                        │
-                        ▼
-       ┌──────────────────────────────────┐
-       │     Fastify Coordinator Server   │  (Port 4000 / $PORT)
-       │  • Static Web Files (/ & assets) │
-       │  • REST API (/api/*)             │
-       │  • SSE Broadcast (/api/stream)   │
-       │  • Sweeper / Lease Watchdog      │
-       │  • SQLite Storage (data/relay.db)│
-       └────────────────┬─────────────────┘
-                        │ HTTP / Heartbeats (127.0.0.1)
-         ┌──────────────┼──────────────┐
-         ▼              ▼              ▼
-   ┌───────────┐  ┌───────────┐  ┌───────────┐
-   │ Worker #1 │  │ Worker #2 │  │ Worker #3 │ (child_process.fork)
-   │  Thread   │  │  Thread   │  │  Thread   │
-   └───────────┘  └───────────┘  └───────────┘
-```
-
-- **Single Service**: A single container or process runs the Coordinator, auto-spawns managed workers, and serves the frontend.
-- **Worker Isolation**: Each worker runs as a separate OS process, with compute executed inside `worker_threads` so heartbeats are never blocked by CPU work.
-- **Storage**: SQLite database in WAL mode stored at `$DATA_DIR/relay.db` (default: `./data/relay.db`).
+**Platform Architecture:** Monorepo with FastAPI Backend (Python 3.12) and Next.js 16 Frontend (React 19 / TypeScript / Tailwind).  
+**Database:** Google Cloud Firestore (production mode) & Firebase Authentication.
 
 ---
 
-## 2. Docker Deployment (Recommended)
+## 1. Hosting Architecture & Trade-Offs
 
-### Using Docker Compose
-```bash
-# Build and run container with persistent volume
-docker compose up -d --build
-
-# View real-time cluster logs
-docker compose logs -f
-
-# Stop container
-docker compose down
-```
-Access the application at `http://localhost:4000`.
-
-### Using Docker CLI
-```bash
-# Build production image
-docker build -t relay:latest .
-
-# Run with persistent volume for database
-docker run -d \
-  --name relay \
-  -p 4000:4000 \
-  -e PORT=4000 \
-  -e HOST=0.0.0.0 \
-  -v relay_data:/data \
-  relay:latest
-```
+Relay v4's scheduler maintains active worker task coordination in memory and stores slice data on local disk (`data/uploads/`), backed by Firestore for distributed state.
+- **Recommended Backend Topology:** A **single always-on container with a persistent volume** (e.g., Fly.io or Render).
+- **Why NOT Serverless Scale-to-Zero (Cloud Run / AWS Lambda)?**
+  Serverless cold starts and scale-to-zero terminate long-running async background loops (batch writes, worker leases, node heartbeats), causing premature aborts of multi-minute batch jobs. If deploying on Cloud Run, minimum instances must be set to `1` (`--min-instances=1`) with a mounted Cloud Storage bucket.
 
 ---
 
-## 3. Bare Metal / VPS Deployment (PM2 / Node.js)
+## 2. Production Deployment Steps
 
-### Prerequisites
-- Node.js 20+ installed
-- npm 9+
-
-### Build and Start
-```bash
-# 1. Install dependencies
-npm ci
-
-# 2. Build all workspaces (shared, server, web)
-npm run build
-
-# 3. Start production coordinator
-npm start
-```
-
-### Running with PM2
-```bash
-npm install -g pm2
-
-# Start coordinator with PM2
-pm2 start apps/server/dist/index.js --name "relay-coordinator" --env production
-
-# Save process list for system reboot
-pm2 save
-pm2 startup
-```
-
----
-
-## 4. Cloud Platform Deployments
-
-### Railway / Render
-1. Connect your Git repository.
-2. Set **Build Command**:
+### Step 2.1: Firebase Console Setup
+1. Open the [Firebase Console](https://console.firebase.google.com/) and navigate to the project named **relay**.
+2. **Authentication:** Enable **Email/Password** and **Google** provider in Authentication > Sign-in method.
+   - Add your production frontend domain (e.g. `relay.yourdomain.com`) to **Authorized domains**.
+3. **Firestore Database:** Create database in **production mode** in region `asia-south1` (or nearest region).
+4. **Deploy Security Rules & Indexes:**
    ```bash
-   npm run build
+   firebase deploy --only firestore:rules,firestore:indexes
    ```
-3. Set **Start Command**:
-   ```bash
-   npm start
-   ```
-4. Set Environment Variables:
-   - `PORT`: Automatically set by Railway/Render
-   - `HOST`: `0.0.0.0`
-   - `NODE_ENV`: `production`
-5. Optional: Mount a persistent volume at `/data` and set `DATA_DIR=/data`.
+5. **Service Account Credentials:**
+   - Go to Project Settings > Service Accounts > Generate new private key.
+   - Save the JSON key securely as `backend/secrets/firebase-service-account.json`.
 
-### Fly.io
-Deploy directly using the provided `Dockerfile`:
+---
+
+### Step 2.2: Backend Deployment (Fly.io / Render)
+
+#### Option A: Deploying on Fly.io (Recommended)
+1. Install `flyctl` and authenticate: `fly auth login`
+2. Create a persistent volume for uploaded files:
+   ```bash
+   fly volumes create relay_data --size 10 --region sin
+   ```
+3. Create `backend/fly.toml`:
+   ```toml
+   app = "relay-api"
+   primary_region = "sin"
+
+   [build]
+     dockerfile = "Dockerfile"
+
+   [env]
+     APP_ENV = "production"
+     PORT = "8000"
+     GLOBAL_CONCURRENCY = "10"
+     ENABLE_CHAOS = "0"
+     FRONTEND_ORIGIN = "https://relay.yourdomain.com"
+
+   [mounts]
+     source = "relay_data"
+     destination = "/app/data"
+
+   [http_service]
+     internal_port = 8000
+     force_https = true
+     auto_stop_machines = false
+     auto_start_machines = true
+     min_machines_running = 1
+
+   [[http_service.checks]]
+     grace_period = "10s"
+     interval = "15s"
+     method = "GET"
+     path = "/api/health/ready"
+     timeout = "5s"
+   ```
+4. Set production secrets on Fly:
+   ```bash
+   fly secrets set \
+     GEMINI_API_KEY="AIza..." \
+     GROQ_API_KEY="gsk_..." \
+     MISTRAL_API_KEY="..." \
+     GITHUB_TOKEN="ghp_..." \
+     ADMIN_PASSWORD="ChooseAStrongSecretPassword2026!"
+   ```
+5. Deploy:
+   ```bash
+   fly deploy
+   ```
+
+#### Option B: Deploying on Render
+1. Create a **Web Service** with Environment `Docker`.
+2. Attach a **Disk** mounted at `/app/data` (size 10 GB).
+3. Set Environment Variables:
+   - `APP_ENV`: `production`
+   - `ENABLE_CHAOS`: `0`
+   - `ADMIN_PASSWORD`: Strong password (not `admin123`)
+   - `FRONTEND_ORIGIN`: Your production frontend URL
+   - Add AI API keys (`GROQ_API_KEY`, `GITHUB_TOKEN`, etc.)
+4. Health check path: `/api/health/ready`
+
+---
+
+### Step 2.3: Frontend Deployment (Vercel / Firebase Hosting)
+
+#### Deploying on Vercel
+1. Link repository to Vercel and set root directory to `frontend/`.
+2. Configure Environment Variables in Vercel Dashboard:
+   ```env
+   NEXT_PUBLIC_API_BASE_URL=https://relay-api.fly.dev
+   NEXT_PUBLIC_FIREBASE_API_KEY=AIza...
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=relay.firebaseapp.com
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=relay
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=relay.firebasestorage.app
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+   NEXT_PUBLIC_FIREBASE_APP_ID=...
+   ```
+3. Deploy:
+   ```bash
+   vercel --prod
+   ```
+
+---
+
+## 3. Seed Production Administrator
+Run the idempotent admin seeding script against production:
 ```bash
-fly launch
-fly volumes create relay_data --size 1
-fly deploy
+cd backend
+APP_ENV=production ADMIN_EMAIL="admin@yourdomain.com" ADMIN_PASSWORD="YourStrongPassword!" python seed_admin.py
 ```
 
 ---
 
-## 5. Environment Variables Reference
+## 4. Secret & Key Rotation Runbook
 
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `4000` | Port for the HTTP server and API |
-| `HOST` | `0.0.0.0` | Host interface to bind |
-| `NODE_ENV` | `production` | Environment mode (`production` or `development`) |
-| `DATA_DIR` | `./data` | Directory where SQLite `relay.db` is stored |
-| `COORDINATOR_URL` | `http://127.0.0.1:$PORT` | Internal URL workers use to register and heartbeat |
+### Rotating an AI Provider Key (Zero-Downtime)
+1. Generate the replacement key in the provider console (e.g. Groq Console or Google AI Studio).
+2. Update the environment variable in Fly.io / Render:
+   ```bash
+   fly secrets set GROQ_API_KEY="new_key_here"
+   ```
+3. Fly performs a rolling update without dropping active requests.
+4. Verify new key health via `GET /api/health` or `POST /api/admin/probe`.
+5. Revoke the old key in the provider console.
+
+### Rotating the Firebase Service Account
+1. Generate a new key in Firebase Console (Project Settings > Service Accounts).
+2. Replace the secret mounted file in production.
+3. Restart the backend process: `fly apps restart relay-api`.
+4. Delete the retired key in Google Cloud IAM.
 
 ---
 
-## 6. Health Checks & Verification
+## 5. Rollback Procedures
 
-- **Cluster Snapshot**: `GET /api/state`
-- **Workloads Metadata**: `GET /api/workloads`
-- **Live Event Stream**: `GET /api/stream`
-- **Frontend SPA**: `GET /` and `GET /app`
+### Frontend Rollback (Vercel)
+1. Open Vercel Dashboard > Project Deployments.
+2. Select previous stable deployment.
+3. Click **Instant Rollback** (active in <5 seconds).
+
+### Backend Rollback (Fly.io)
+1. List release versions: `fly releases`
+2. Rollback to image tag:
+   ```bash
+   fly deploy --image registry.fly.io/relay-api:<previous-version>
+   ```
+
+---
+
+## 6. Post-Deployment Verification (Smoke Test)
+Execute the automated smoke script against the live URLs:
+```bash
+./scripts/smoke_prod.sh https://relay-api.fly.dev https://relay.yourdomain.com
+```
+
+---
+
+## 7. Launch Checklist
+- [ ] Firebase Authentication enabled (Email/Password, Google).
+- [ ] Authorized domains configured in Firebase Console.
+- [ ] `firestore.rules` and `firestore.indexes.json` deployed.
+- [ ] Production Firebase service account key installed.
+- [ ] `APP_ENV=production` set; `ADMIN_PASSWORD` changed from `admin123`.
+- [ ] `ENABLE_CHAOS=0` verified in production settings.
+- [ ] Persistent disk volume mounted at `/app/data`.
+- [ ] Backend `/api/health/ready` probe returning HTTP 200.
+- [ ] Automated smoke test `./scripts/smoke_prod.sh` returns green.

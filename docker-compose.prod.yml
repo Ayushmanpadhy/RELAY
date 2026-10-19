@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: relay-backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - PORT=8000
+      - FIREBASE_PROJECT_ID=relay-2c57e
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/firebase-service-account.json
+      - GEMINI_MODEL=gemini-flash-latest
+      - GEMINI_LITE_MODEL=gemini-3.5-flash-lite
+      - GROQ_MODEL=openai/gpt-oss-20b
+      - OPENROUTER_MODEL=minimax/minimax-m3.1-flash:free
+    volumes:
+      - relay_data:/app/data
+      - ./backend/secrets:/app/secrets:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: relay-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  relay_data:

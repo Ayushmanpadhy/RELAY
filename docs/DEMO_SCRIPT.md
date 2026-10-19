@@ -1,98 +1,109 @@
-# Relay: 5-Minute Demonstration Walkthrough
+# Relay v4: End-to-End Demo Script & Acceptance Verification
 
-This script provides an exact step-by-step walkthrough to demonstrate Relay's distributed computing architecture, live worker telemetry, failure recovery, and empirical scalability in 5 minutes.
+This guide walks through verifying all 8 acceptance scenarios defined in Section 7 of `SRS_1_FULL_SYSTEM.md`.
 
 ---
 
-## Preparation (30 seconds before presentation)
-1. In your terminal, run:
+## 0. Quick Start & Startup Verification
+
+1. Start both backend and frontend servers with a single command from the root directory:
    ```bash
    npm run dev
    ```
-2. Open your browser at `http://localhost:5173`.
-3. Confirm the live connection dot in the upper-right corner reads **Live** in green.
+2. The terminal output will show:
+   - Backend running on `http://localhost:8000` with CORS enabled for `http://localhost:3000`.
+   - 100 virtual worker nodes initialized in memory.
+   - Startup provider probe results confirming active models (`gemini-3.6-flash`, `groq`, etc.).
+   - Frontend running on `http://localhost:3000`.
 
 ---
 
-## Step 1: The Landing Page (0:00 - 1:00)
-- **What to show:**
-  - View the landing page hero at `http://localhost:5173/`.
-  - Move the mouse across the screen to demonstrate smooth 3D camera parallax.
-  - Hover over a worker node to inspect its live simulated metrics (`worker-3 · 128 tasks done`).
-- **Interaction (Simulate Crash in 3D):**
-  - **Click a worker node.**
-  - The node turns red, flickers, and drops its task packets.
-  - Show the audience how the central coordinator immediately reroutes the task curves to the surviving nodes.
-  - Point out the "Recovered" state when the node automatically revives after 4 seconds.
-  - Click the center coordinator to trigger a packet burst.
-- **What to say:**
-  > *"Relay is a distributed task platform. In 5 seconds this visualization conveys our entire premise: a coordinator splits jobs into tasks, independent workers execute them in parallel, and when any worker crashes, the system recovers and reroutes work automatically without data loss."*
-- Click **"Open dashboard"** (or navigate to `/app`).
+## Scenario 1: Exact Numeric Computation (100,000 Numbers)
+
+1. Generate the test dataset and print ground truth:
+   ```bash
+   npm run gen:numbers
+   ```
+   *Output note: Saves 100,000 numbers to `data/numbers_100k.txt` and prints the exact count of numbers starting with '9'.*
+2. Visit `http://localhost:3000/auth`. Click **"Sign in as User"**.
+3. In the user composer at `/app`:
+   - Enter prompt: `"Count how many numbers start with 9 in this dataset"`.
+   - Drop the generated file `data/numbers_100k.txt`.
+   - Click **Start**.
+4. The user sees the progress view at `/app/r/[jobId]` with a percentage ring and calm step labels ("Working on it").
+5. In another tab, open `http://localhost:3000/admin`.
+   - Observe the 100-node live grid turning accent color as worker slots pull and compute the 100 sub-tasks.
+6. When completed:
+   - The user receives the exact computed ground truth count in the headline and explanation (verified by the Number Guard).
+   - The user interface reveals **NO technical internals** (no mentions of nodes, providers, or tools).
 
 ---
 
-## Step 2: Live Cluster Telemetry (1:00 - 1:45)
-- **What to show:**
-  - The top metrics strip: **Workers alive (3)**, **Queued tasks (0)**, **Running tasks (0)**, **Completed jobs (0)**.
-  - The **Cluster** column showing 3 active managed worker processes (`worker-1`, `worker-2`, `worker-3`).
-  - Emphasize that these are **real OS child processes** (`child_process.fork`), running independently and communicating with the coordinator strictly over HTTP.
-- **Interaction:**
-  - Click **"+ Add worker"**. Watch a 4th worker process (`worker-4`) instantly fork, register over HTTP, and appear live.
-- **What to say:**
-  > *"Here on the dashboard, we see real-time state hydrated over Server-Sent Events. These aren't simulations—each worker is an isolated operating system process with its own PID. The workers pull tasks atomically from SQLite using serialized transactions, ensuring zero race conditions."*
+## Scenario 2: Document Intelligence (AI Mode)
+
+1. Open `/app`.
+2. Type: `"Summarize these customer feedback reviews and extract the top 5 complaints"`.
+3. Attach customer reviews text or markdown file.
+4. Click **Start**.
+5. The AI Orchestrator classifies the request as `mode: "ai"`, divides into 10 to 40 parts, workers run AI synthesis, and the user receives a structured summary and downloadable report.
 
 ---
 
-## Step 3: Submitting a Job & The Signature Timeline (1:45 - 3:00)
-- **What to show:**
-  - Click **"New job"**.
-  - Select **"Prime Counter"**, choose **Medium** scale (24 tasks, counting primes up to 10,000,000), set **Priority: High**, and click **"Run job"**.
-  - You will be redirected to the **Job Detail** view (`/app/jobs/:id`).
-  - Watch the **Task Grid** light up: chips transition from dim (Pending) to pulsing accent (Leased) to green (Done).
-  - Direct the audience's attention to the **Execution Timeline**:
-    - Horizontal swim lanes representing each worker process.
-    - Bars extending across time as workers crunch numbers.
-- **What to say:**
-  > *"Notice how the workload is partitioned into 24 discrete ranges. The workers pull tasks in parallel. Compute runs inside isolated worker threads, so even when CPU usage spikes to 100%, the worker's HTTP heartbeat loop is never blocked."*
+## Scenario 3: Chaos Engineering & Fault Tolerance
+
+1. Submit a job from `/app`.
+2. While the job is running, navigate to `http://localhost:3000/admin/nodes`.
+3. In the **Simulated Failure Injection Controls**:
+   - Click **Crash Node** on `node-005`.
+   - Select `groq` and click **Simulate Provider Outage (30 seconds)**.
+4. Observe:
+   - `node-005` immediately turns red (`crashed`).
+   - Groq provider circuit breaker opens.
+   - In-flight tasks automatically re-route to alternative nodes and providers (e.g. Gemini).
+   - In `/admin/jobs/[id]`, inspect the **Reassignment Trail** showing the failure and successful retry.
+   - The job completes with 100% ground-truth accuracy.
+5. Click **Heal All Nodes & Circuits** to restore all systems.
 
 ---
 
-## Step 4: Injecting Chaos — Live Hard Crash & Recovery (3:00 - 4:00)
-- **Interaction (Deliberate Failure Injection):**
-  - Return to the Dashboard in another tab (or navigate back to `/app`), find a worker marked **BUSY**, click its `⋯` options menu, and click **"Kill Process (Crash)"**.
-  - Return to the **Job Detail** page.
-- **What to show:**
-  - In the Timeline swim lane, the killed worker immediately displays a red **"crashed"** indicator.
-  - The in-flight attempt turns into a **bad diagonally hatched bar marked "LOST"**.
-  - The coordinator sweeper detects heartbeat silence, expires the task's lease, and requeues the task with exponential backoff.
-  - A surviving worker picks up the lost task (marked attempt #2) and completes it.
-  - The job finishes with **100% completion**, reaching `DONE` with the exact verified result: **664,579 primes ≤ 10,000,000**.
-  - Open the bottom **Activity** log drawer to see the exact narrative line:
-    `worker-X lost contact → 1 task(s) requeued`.
-- **What to say:**
-  > *"This diagonal hatched bar is the core proof of fault tolerance. When we sent a SIGKILL to worker-3, it died instantly with zero warning. The coordinator detected the missed heartbeat, marked the attempt LOST, and safely requeued the task. Fencing tokens guaranteed that even if that worker had hung, a stale result could never corrupt the final reduction."*
+## Scenario 4: Missing Provider Key Handling
+
+1. Remove or leave empty any provider key (e.g. `MISTRAL_API_KEY=""`) in `backend/.env`.
+2. Restart backend or trigger manual probe from `/admin/settings`.
+3. Notice:
+   - That provider is marked `unavailable` with reason `"API key not configured in .env"`.
+   - All jobs continue seamlessly on the remaining healthy providers without errors or downtime.
 
 ---
 
-## Step 5: Scalability Benchmark (4:00 - 5:00)
-- **What to show:**
-  - Click **"Benchmark"** in the top navigation.
-  - Keep default worker counts **1, 2, and 4** checked.
-  - Click **"Run Benchmark"**.
-  - Watch the live orchestration stepper:
-    1. Cluster automatically scales to 1 worker, measures execution time.
-    2. Cluster automatically scales to 2 workers, measures execution time.
-    3. Cluster automatically scales to 4 workers, measures execution time.
-    4. Cluster restores original worker count.
-  - Inspect the generated Recharts charts:
-    - **Time vs Workers** (descending bars).
-    - **Speedup vs Workers** (measured line vs dashed ideal linear).
-    - Results table showing measured speedup and parallel efficiency %.
-    - Read the automated insight aloud: *"4 workers were 3.4x faster (85% efficiency)"*.
-- **What to say:**
-  > *"To prove scalability with real empirical numbers, our benchmark orchestrates automated cluster scaling and measures wall-clock speedup. We see near-linear scaling up to 4 workers, with slight sublinear dropoff caused by HTTP coordination latency and Amdahl's Law during the final reduce step."*
+## Scenario 5: Security & Role Isolation
+
+1. Non-admin access check:
+   - Sign in as a regular user and attempt to navigate to `/admin`.
+   - The route guard prevents access.
+   - Calling `/api/admin/overview` with a user token returns `403 Forbidden`.
+2. User isolation check:
+   - User A cannot access `/api/jobs/{jobId}` belonging to User B.
+   - Firestore security rules in `firestore.rules` deny direct client writes to job data and deny reading `jobs_internal`.
 
 ---
 
-## Conclusion
-> *"In summary, Relay proves that robust distributed systems don't require complex external infrastructure like Kafka or Redis. With synchronous atomic transactions in SQLite, non-blocking heartbeats, monotonic fencing tokens, and pull-based scheduling, a system can withstand arbitrary process failures while guaranteeing correctness and high throughput."*
+## Scenario 6: Role Redirection & Theme Transitions
+
+1. Sign in as user (`user@example.com`):
+   - Triggers the 900ms circular reveal transition from the button coordinate, transforming dark auth into calm light `/app`.
+2. Sign in as admin (`admin@gmail.com`):
+   - Stays in high-contrast dark theme, landing directly on `/admin`.
+3. Sign out:
+   - Reverses the circular transition back to the dark landing page.
+
+---
+
+## Scenario 7: Offline Demo Mode (`RELAY_FAKE_PROVIDERS=1`)
+
+1. Set `RELAY_FAKE_PROVIDERS=1` in `backend/.env`.
+2. Run automated integration test suite:
+   ```bash
+   backend\.venv\Scripts\python -m pytest backend/tests
+   ```
+3. All 14 tests pass completely offline with simulated provider latency, deterministic tools, and verified reassignments!

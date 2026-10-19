@@ -1,25 +1,19 @@
 {
-  "name": "relay-monorepo",
-  "version": "1.0.0",
+  "name": "relay-v4",
+  "version": "4.0.0",
   "private": true,
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
+  "description": "Relay: Distributed AI Task Platform",
   "scripts": {
-    "dev": "concurrently -k -p \"[{name}]\" -n \"server,web\" -c \"cyan.bold,magenta.bold\" \"npm run dev:server\" \"npm run dev:web\"",
-    "dev:server": "npm run --workspace=@relay/server dev",
-    "dev:web": "npm run --workspace=@relay/web dev",
-    "build": "npm run --workspace=@relay/shared build && npm run --workspace=@relay/server build && npm run --workspace=@relay/web build",
-    "start": "node apps/server/dist/index.js",
-    "test": "vitest run",
-    "worker": "npm run --workspace=@relay/server worker",
-    "chaos-test": "tsx scripts/chaos-test.ts"
+    "dev": "concurrently -k -p \"[{name}]\" -n \"backend,frontend\" -c \"cyan.bold,magenta.bold\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "backend\\.venv\\Scripts\\python -m uvicorn app.main:app --app-dir backend --reload --port 8000",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "build:frontend": "npm run build --prefix frontend",
+    "test:backend": "backend\\.venv\\Scripts\\python -m pytest backend/tests",
+    "doctor": "backend\\.venv\\Scripts\\python scripts/doctor.py",
+    "seed:admin": "backend\\.venv\\Scripts\\python backend/scripts/seed_admin.py",
+    "gen:numbers": "backend\\.venv\\Scripts\\python backend/scripts/gen_numbers.py"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2",
-    "tsx": "^4.19.3",
-    "typescript": "^5.8.2",
-    "vitest": "^3.0.7"
+    "concurrently": "^9.1.2"
   }
 }

@@ -1,8 +1,41 @@
+# Secrets & Env
+.env
+.env.*
+*.env
+*.env.local
+APIKEYS.txt
+secrets/
+backend/secrets/
+*/secrets/
+*.pem
+*.key
+*.json-credentials
+
+# Storage & Uploads
+data/
+backend/data/
+uploads/
+*.log
+
+# Dependencies & Build Outputs
 node_modules/
 dist/
-data/
-*.log
-.env
-.env.local
+.next/
+out/
+build/
+
+# Python & Tooling
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# OS artifacts
 .DS_Store
 Thumbs.db

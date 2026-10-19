@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Relay · Distributed Task Platform</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+:root{--bg:#0B0D12;--surface:#12151C;--surface2:#181C25;--line:#232836;--text:#E8EAF0;--dim:#8A92A6;--accent:#7C8CFF;--ok:#4ADE9A;--bad:#FF6B6B;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-behavior:smooth;scroll-padding-top:80px;overflow-x:clip}
+body{margin:0;background:var(--bg);color:var(--text);font:400 16px/1.6 Inter,system-ui,sans-serif;overflow-x:clip}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+nav{position:sticky;top:0;z-index:20;background:rgba(11,13,18,.8);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+nav .wrap{height:64px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-weight:600;letter-spacing:.02em;display:flex;align-items:center;gap:10px}
+.logo i{width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 14px var(--accent)}
+.btn{display:inline-block;border:0;cursor:pointer;font:600 15px Inter,sans-serif;padding:13px 22px;border-radius:10px;transition:transform .2s,background .2s}
+.btn:hover{transform:translateY(-2px)}
+.btn.p{background:var(--accent);color:#0B0D12}
+.btn.s{background:var(--surface2);color:var(--text)}
+.btn:focus-visible,.step:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:40px;align-items:center;min-height:calc(100svh - 64px);padding:32px 0}
+.label{font-size:12px;letter-spacing:.18em;color:var(--accent);margin:0 0 20px}
+h1{font-size:clamp(36px,5vw,64px);line-height:1.08;margin:0 0 22px;font-weight:600;letter-spacing:-.02em}
+.sub{color:var(--dim);font-size:18px;max-width:30em;margin:0 0 32px}
+.btns{display:flex;flex-wrap:wrap;gap:12px}
+.w{display:inline-block;white-space:nowrap}.c{display:inline-block;will-change:transform}
+.stagewrap{display:flex;flex-direction:column;gap:12px}
+.stage{position:relative;height:min(74vh,680px);border-radius:24px;background:radial-gradient(circle at 50% 50%,rgba(124,140,255,.16),transparent 62%),var(--surface);border:1px solid var(--line);overflow:hidden}
+#cv{width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab}
+#tip{position:absolute;left:0;top:0;pointer-events:none;opacity:0;background:var(--surface2);border:1px solid var(--line);padding:6px 10px;border-radius:8px;font-size:12px;white-space:nowrap;transition:opacity .15s}
+.nogl #cv,.nogl #tip{display:none}.fb{display:none;place-items:center;height:100%;color:var(--dim);padding:24px;text-align:center}.nogl .fb{display:grid}
+.cap{display:flex;justify-content:space-between;gap:16px;font-size:13px;color:var(--dim);min-height:22px}
+.cap b{color:var(--text);font-weight:400}
+section.blk{padding:110px 0}
+h2{font-size:clamp(28px,3.6vw,44px);line-height:1.15;margin:0 0 14px;font-weight:600;letter-spacing:-.02em}
+.lead{color:var(--dim);max-width:34em;margin:0 0 56px}
+.steps{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.track{position:absolute;left:0;right:0;top:-18px;height:2px;background:var(--line)}
+.fill{height:100%;background:var(--accent);transform-origin:left;transform:scaleX(0)}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:26px;cursor:pointer;text-align:left;color:inherit;font:inherit;transition:border-color .25s,transform .25s,background .25s}
+.step:hover{transform:translateY(-4px)}
+.step.on{border-color:var(--accent);background:var(--surface2)}
+.step .n{color:var(--accent);font-size:13px}
+.step h3{margin:10px 0 6px;font-size:20px}.step p{margin:0;color:var(--dim);font-size:15px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.card{background:var(--surface);border-radius:14px;padding:30px}
+.card h3{margin:0 0 8px;font-size:20px}.card p{margin:0;color:var(--dim)}
+.cta{text-align:center}.cta h2{max-width:14em;margin:0 auto 32px}
+footer{border-top:1px solid var(--line);padding:28px 0;color:var(--dim);font-size:13px;text-align:center}
+#intro{position:fixed;inset:0;z-index:100;background:var(--bg);display:grid;place-items:center}
+#intro div{font-size:clamp(44px,12vw,120px);font-weight:600;letter-spacing:.08em}
+@media(max-width:860px){.hero{grid-template-columns:1fr;gap:28px}.stage{height:56vh}.steps,.cards{grid-template-columns:1fr}.track{display:none}section.blk{padding:80px 0}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div id="intro" aria-hidden="true"><div id="introT" data-raw="RELAY">RELAY</div></div>
+<nav><div class="wrap"><a class="logo" href="#top"><i></i>Relay</a><a class="btn s" href="/app">Open dashboard</a></div></nav>
+<main id="top">
+<div class="wrap hero">
+  <div>
+    <p class="label mono" id="lab">DISTRIBUTED TASK PLATFORM</p>
+    <h1 id="h1" data-split data-hero>Split the work. Survive the failures.</h1>
+    <p class="sub" id="sub">Relay breaks jobs into tasks, runs them across a pool of workers, and recovers automatically when one goes down.</p>
+    <div class="btns" id="btns"><button class="btn p" id="demo">Try the demo</button><a class="btn s" href="#how">How it works</a></div>
+  </div>
+  <div class="stagewrap">
+    <div class="stage" id="stage"><canvas id="cv" aria-label="Interactive 3D cluster demo"></canvas><div id="tip" class="mono"></div><div class="fb">3D demo is off (reduced motion or no WebGL). Relay splits a job into tasks, runs them on many workers and merges the results.</div></div>
+    <div class="cap"><span id="status" class="mono">Click a worker to crash it · click the core for a burst</span><span>Interactive demo</span></div>
+  </div>
+</div>
+<section class="blk" id="how"><div class="wrap">
+  <h2 data-split>How it works</h2>
+  <p class="lead reveal">One job goes in. Many workers share it. One answer comes out.</p>
+  <div class="steps"><div class="track"><div class="fill"></div></div>
+    <button class="step reveal on"><span class="n mono">01</span><h3>Submit</h3><p>You send a job, like counting primes up to 10 million.</p></button>
+    <button class="step reveal"><span class="n mono">02</span><h3>Split</h3><p>The coordinator cuts it into small, independent tasks.</p></button>
+    <button class="step reveal"><span class="n mono">03</span><h3>Run</h3><p>Workers pull tasks whenever they are free, in parallel.</p></button>
+    <button class="step reveal"><span class="n mono">04</span><h3>Merge</h3><p>Partial results are combined into the final answer.</p></button>
+  </div>
+</div></section>
+<section class="blk"><div class="wrap">
+  <h2 data-split>Built to survive failure</h2>
+  <p class="lead reveal">A crashed worker never means a lost task.</p>
+  <div class="cards">
+    <div class="card reveal"><h3>Heartbeats</h3><p>Silence from a worker is detected within seconds.</p></div>
+    <div class="card reveal"><h3>Leases</h3><p>Lost tasks return to the queue and run again elsewhere.</p></div>
+    <div class="card reveal"><h3>Fencing</h3><p>Stale results from replaced workers are rejected.</p></div>
+  </div>
+</div></section>
+<section class="blk cta"><div class="wrap"><h2 data-split>Break a worker. Watch it heal.</h2><a class="btn p reveal" href="/app">Open dashboard</a></div></section>
+</main>
+<footer>Relay · Distributed Computing mini project · 2026</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script>
+(()=>{
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches,$=s=>document.querySelector(s),R=gsap.utils.random;
+gsap.registerPlugin(ScrollTrigger);
+function split(el){const t=el.textContent.trim();el.textContent='';el.setAttribute('aria-label',t);
+ t.split(' ').forEach((w,i,a)=>{const ws=document.createElement('span');ws.className='w';ws.setAttribute('aria-hidden','true');
+  [...w].forEach(ch=>{const s=document.createElement('span');s.className='c';s.textContent=ch;ws.appendChild(s)});
+  el.appendChild(ws);if(i<a.length-1)el.appendChild(document.createTextNode(' '))});return el.querySelectorAll('.c')}
+const scatter=(chars,extra)=>gsap.from(chars,Object.assign({x:()=>R(-700,700),y:()=>R(-500,500),rotation:()=>R(-540,540),scale:()=>R(.2,2.2),opacity:0,duration:1.3,ease:'power4.out',stagger:{each:.02,from:'random'}},extra));
+
+/* ---------- 3D scene ---------- */
+function initScene(){
+ const wrap=$('#stage'),cv=$('#cv'),tip=$('#tip'),status=$('#status');let r;
+ try{r=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true})}catch(e){return null}
+ r.setPixelRatio(Math.min(devicePixelRatio,1.75));
+ const sc=new THREE.Scene(),cam=new THREE.PerspectiveCamera(45,1,.1,100);cam.position.set(0,2.4,20);
+ const root=new THREE.Group();sc.add(root);
+ sc.add(new THREE.AmbientLight(0xffffff,.7));const pl=new THREE.PointLight(0x7c8cff,2.2,40);root.add(pl);
+ const AC=0x7c8cff,OK=0x4ade9a,BAD=0xff6b6b,ZERO=new THREE.Vector3();
+ const core=new THREE.Group();root.add(core);
+ const ico=new THREE.Mesh(new THREE.IcosahedronGeometry(1.15,1),new THREE.MeshBasicMaterial({color:AC,wireframe:true}));
+ const inner=new THREE.Mesh(new THREE.SphereGeometry(.6,24,24),new THREE.MeshBasicMaterial({color:AC}));
+ const halo=new THREE.Mesh(new THREE.SphereGeometry(1.6,24,24),new THREE.MeshBasicMaterial({color:AC,transparent:true,opacity:.12,side:THREE.BackSide}));
+ core.add(ico,inner,halo);core.scale.setScalar(0);let corePulse=0;
+ const W=[];
+ for(let i=0;i<6;i++){const ring=i%2;
+  const m=new THREE.Mesh(new THREE.SphereGeometry(.4,24,24),new THREE.MeshStandardMaterial({color:0x1a2030,emissive:AC,emissiveIntensity:.55,roughness:.4}));
+  m.userData={i,done:0,dead:false,rm:0,a:i/6*Math.PI*2,r:ring?5.3:4,tilt:ring?-.35:.4,sp:ring?-.22:.3,pulse:0,deadT:0};
+  m.scale.setScalar(0);root.add(m);
+  const ln=new THREE.Line(new THREE.BufferGeometry().setFromPoints([ZERO,ZERO]),new THREE.LineBasicMaterial({color:AC,transparent:true,opacity:.22}));
+  ln.frustumCulled=false;root.add(ln);m.userData.ln=ln;W.push(m)}
+ const sp=[];for(let i=0;i<320;i++){const v=new THREE.Vector3(R(-1,1),R(-1,1),R(-1,1)).normalize().multiplyScalar(R(11,18));sp.push(v.x,v.y,v.z)}
+ const sg=new THREE.BufferGeometry();sg.setAttribute('position',new THREE.Float32BufferAttribute(sp,3));
+ const stars=new THREE.Points(sg,new THREE.PointsMaterial({color:0x8a92a6,size:.07,transparent:true,opacity:.6}));sc.add(stars);
+ const P=[];for(let i=0;i<26;i++){const m=new THREE.Mesh(new THREE.SphereGeometry(.1,10,10),new THREE.MeshBasicMaterial({color:AC}));m.visible=false;root.add(m);P.push({m,on:false,t:0,from:new THREE.Vector3(),w:null,ph:'out',hold:0})}
+ const alive=()=>W.filter(w=>!w.userData.dead&&w.userData.rm>.9);
+ function spawn(w){const p=P.find(x=>!x.on);if(!p||!w)return;Object.assign(p,{on:true,t:0,w,ph:'out',hold:0});p.from.set(0,0,0);p.m.material.color.setHex(AC);p.m.visible=true}
+ const burst=()=>alive().forEach((w,i)=>setTimeout(()=>spawn(w),i*80));
+ function revive(w){const u=w.userData;if(!u.dead)return;u.dead=false;w.material.emissive.setHex(AC);status.textContent=`worker-${u.i+1} back online`}
+ function crash(w){const u=w.userData;if(u.dead){revive(w);return}
+  u.dead=true;u.deadT=0;w.material.emissive.setHex(BAD);let n=0;
+  P.forEach(p=>{if(p.on&&p.ph==='out'&&p.w===w){p.hold=.9;n++;p.from.copy(p.m.position);p.m.material.color.setHex(BAD)}});
+  status.textContent=`worker-${u.i+1} crashed · ${n} task${n===1?'':'s'} in flight`;
+  setTimeout(()=>{if(n)status.textContent=`worker-${u.i+1} crashed · ${n} task${n===1?'':'s'} re-routed ✓`},950);
+  setTimeout(()=>revive(w),4200)}
+ /* interaction */
+ const ray=new THREE.Raycaster(),mp=new THREE.Vector2();let down=null,drag=false,rot=0,rotT=0,hov=null,ready=false;
+ const pick=e=>{const b=cv.getBoundingClientRect();mp.set((e.clientX-b.left)/b.width*2-1,-((e.clientY-b.top)/b.height)*2+1);ray.setFromCamera(mp,cam);const h=ray.intersectObjects([...W,inner,ico],false)[0];return h?h.object:null};
+ cv.addEventListener('pointerdown',e=>{down={x:e.clientX,rot:rotT};drag=false;cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing'});
+ cv.addEventListener('pointermove',e=>{const b=cv.getBoundingClientRect();mp.set((e.clientX-b.left)/b.width*2-1,-((e.clientY-b.top)/b.height)*2+1);
+  if(down){const dx=e.clientX-down.x;if(Math.abs(dx)>5)drag=true;if(drag)rotT=down.rot+dx*.01;return}
+  const o=pick(e);hov=o;cv.style.cursor=o?'pointer':'grab';
+  if(o&&W.includes(o)){const u=o.userData;tip.textContent=u.dead?`worker-${u.i+1} · crashed`:`worker-${u.i+1} · ${u.done} tasks done`;tip.style.transform=`translate(${e.clientX-b.left+14}px,${e.clientY-b.top+14}px)`;tip.style.opacity=1}else tip.style.opacity=0});
+ cv.addEventListener('pointerleave',()=>{tip.style.opacity=0;hov=null});
+ cv.addEventListener('pointerup',e=>{cv.style.cursor=hov?'pointer':'grab';if(!drag){const o=pick(e);if(o){W.includes(o)?crash(o):(corePulse=1,burst())}}down=null;drag=false;rotT=0});
+ /* size + visibility */
+ let vis=true;new IntersectionObserver(a=>vis=a[0].isIntersecting).observe(wrap);
+ new ResizeObserver(()=>{const w=wrap.clientWidth,h=wrap.clientHeight;r.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()}).observe(wrap);
+ /* loop */
+ const clk=new THREE.Clock();let acc=0;
+ function frame(){requestAnimationFrame(frame);if(!vis||document.hidden){clk.getDelta();return}
+  const dt=Math.min(clk.getDelta(),.05),t=clk.elapsedTime;acc+=dt;
+  if(ready&&acc>.45){acc=0;const a=alive();if(a.length)spawn(a[(Math.random()*a.length)|0])}
+  rot+=(rotT-rot)*.08;root.rotation.y=rot;ico.rotation.y+=dt*.4;ico.rotation.x+=dt*.2;stars.rotation.y+=dt*.01;
+  corePulse=Math.max(0,corePulse-dt*2.5);inner.scale.setScalar(1+corePulse*.5+Math.sin(t*2)*.04);
+  W.forEach(w=>{const u=w.userData;u.a+=u.sp*dt;const rr=u.r*u.rm;
+   w.position.set(Math.cos(u.a)*rr,Math.sin(u.a)*rr*Math.sin(u.tilt),Math.sin(u.a)*rr*Math.cos(u.tilt));
+   const pa=u.ln.geometry.attributes.position;pa.setXYZ(1,w.position.x,w.position.y,w.position.z);pa.needsUpdate=true;
+   u.ln.material.color.setHex(u.dead?BAD:AC);u.ln.material.opacity=u.dead?.1:.22;
+   u.pulse=Math.max(0,u.pulse-dt*3);
+   if(u.dead){u.deadT+=dt;w.material.emissiveIntensity=u.deadT<.8?(Math.sin(t*50)>0?1.2:.1):.7}else w.material.emissiveIntensity=.55+u.pulse*1.4;
+   const base=(u.dead?.85:1)*(hov===w?1.25:1);if(u.rm>.05){const s=w.scale.x;if(!gsap.isTweening(w.scale))w.scale.setScalar(s+(base-s)*.2)}});
+  P.forEach(p=>{if(!p.on)return;
+   if(p.hold>0){p.hold-=dt;if(p.hold<=0){const a=alive();if(a.length){p.w=a[(Math.random()*a.length)|0];p.t=0;p.ph='out';p.m.material.color.setHex(AC)}else{p.on=false;p.m.visible=false}}return}
+   p.t+=dt*.8;const tg=p.ph==='out'?p.w.position:ZERO;p.m.position.lerpVectors(p.from,tg,Math.min(p.t,1));p.m.position.y+=Math.sin(Math.PI*Math.min(p.t,1))*.5;
+   if(p.t>=1){if(p.ph==='out'){p.w.userData.pulse=1;p.w.userData.done++;p.from.copy(p.w.position);p.ph='back';p.t=0;p.m.material.color.setHex(OK)}else{corePulse=Math.max(corePulse,.5);p.on=false;p.m.visible=false}}});
+  const px=mp.x*1.8,py=2.4-mp.y*1.2;cam.position.x+=(px-cam.position.x)*.04;cam.position.y+=(py-cam.position.y)*.04;cam.lookAt(0,0,0);
+  r.render(sc,cam)}
+ frame();
+ return{burst:()=>{corePulse=1;burst()},intro(){
+  gsap.to(cam.position,{z:14,duration:2.4,ease:'power3.out'});
+  gsap.to(core.scale,{x:1,y:1,z:1,duration:1.5,ease:'elastic.out(1,.5)'});
+  W.forEach((w,i)=>{gsap.to(w.scale,{x:1,y:1,z:1,duration:.9,delay:.5+i*.12,ease:'back.out(2)'});gsap.to(w.userData,{rm:1,duration:1.8,delay:.5+i*.12,ease:'power3.out'})});
+  gsap.delayedCall(1.8,()=>{ready=true;burst()})}}
+}
+
+/* ---------- page animation ---------- */
+const S=reduce?null:initScene();
+if(!S)$('#stage').classList.add('nogl');
+$('#demo').onclick=()=>{if(S){S.burst();if(innerWidth<860)$('#stage').scrollIntoView({behavior:'smooth',block:'center'})}};
+document.querySelectorAll('.step').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.step').forEach(x=>x.classList.toggle('on',x===b))}));
+if(reduce){$('#intro').remove()}
+else{
+ gsap.set('.reveal',{opacity:0});
+ const heroChars=split($('#h1'));
+ document.querySelectorAll('[data-split]:not([data-hero])').forEach(el=>{const ch=split(el);
+  scatter(ch,{scrollTrigger:{trigger:el,start:'top 88%',toggleActions:'play none none reverse'}})});
+ ScrollTrigger.batch('.reveal',{start:'top 90%',onEnter:b=>gsap.to(b,{y:0,opacity:1,stagger:.12,duration:.8,ease:'power3.out',overwrite:true}),onLeaveBack:b=>gsap.to(b,{opacity:0,duration:.3,overwrite:true})});
+ gsap.set('.reveal',{y:40});
+ gsap.to('.fill',{scaleX:1,ease:'none',scrollTrigger:{trigger:'.steps',start:'top 80%',end:'bottom 55%',scrub:true}});
+ const introChars=split($('#introT'));gsap.set(['#lab','#sub','#btns'],{opacity:0,y:24});
+ const tl=gsap.timeline();
+ tl.from(introChars,{x:()=>R(-900,900),y:()=>R(-600,600),rotation:()=>R(-720,720),scale:()=>R(.1,3),opacity:0,duration:1.5,ease:'power4.out',stagger:{each:.06,from:'random'}})
+  .to(introChars,{y:-30,opacity:0,duration:.5,stagger:.05,ease:'power2.in'},'+=.35')
+  .to('#intro',{opacity:0,duration:.5,onComplete:()=>$('#intro').remove()},'-=.2')
+  .add(()=>{S&&S.intro()},'-=.2')
+  .to('#lab',{opacity:1,y:0,duration:.7},'<')
+  .add(()=>scatter(heroChars),'<.1')
+  .to(['#sub','#btns'],{opacity:1,y:0,duration:.8,stagger:.15,ease:'power3.out'},'>-.6');
+}
+})();
+</script>
+</body>
+</html>

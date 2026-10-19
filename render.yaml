@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: relay-api
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    plan: free
+    region: singapore
+    disk:
+      name: relay-data
+      mountPath: /app/data
+      sizeGB: 5
+    healthCheckPath: /api/health/ready
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PORT
+        value: 8000
+      - key: GLOBAL_CONCURRENCY
+        value: "10"
+      - key: ENABLE_CHAOS
+        value: "0"
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: ADMIN_EMAIL
+        value: admin@gmail.com
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        value: relay-2c57e
+      - key: GEMINI_MODEL
+        value: gemini-flash-latest
+      - key: GEMINI_LITE_MODEL
+        value: gemini-3.5-flash-lite
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-20b
+      - key: OPENROUTER_MODEL
+        value: minimax/minimax-m3.1-flash:free
