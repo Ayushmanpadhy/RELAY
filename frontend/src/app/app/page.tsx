@@ -19,6 +19,7 @@ import {
   Loader2,
   Settings,
   User,
+  ShieldCheck,
 } from "lucide-react";
 import { JobRecord } from "@/lib/types";
 import { UserProfileModal } from "@/components/UserProfileModal";
@@ -34,7 +35,7 @@ const PLACEHOLDERS = [
 
 export default function UserHomePage() {
   const router = useRouter();
-  const { user, token, signOut } = useAuth();
+  const { user, token, isAdmin, signOut } = useAuth();
   const [prompt, setPrompt] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -161,6 +162,17 @@ export default function UserHomePage() {
               <Settings className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Settings</span>
             </button>
+
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--accent)] bg-[rgba(99,102,241,0.08)] hover:bg-[rgba(99,102,241,0.16)] text-xs text-[var(--accent)] font-semibold transition-all cursor-pointer"
+                title="Go to Admin Console"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Admin Console</span>
+              </Link>
+            )}
 
             <button
               onClick={handleSignOut}

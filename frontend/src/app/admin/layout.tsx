@@ -3,6 +3,7 @@
 import React, { useEffect, Suspense } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import Link from "next/link";
 import {
   LayoutDashboard,
   Layers,
@@ -11,6 +12,7 @@ import {
   Users,
   LogOut,
   Radio,
+  ArrowLeft,
 } from "lucide-react";
 
 function AdminNav() {
@@ -118,6 +120,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </span>
           </div>
           <div className="flex items-center gap-4 text-xs font-mono text-[var(--dim)]">
+            <Link
+              href="/app"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] hover:bg-[var(--line)] text-[var(--text)] transition-colors text-xs font-sans font-medium"
+              title="Switch to User Workspace"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>User App</span>
+            </Link>
             <span>FastAPI v4.0.0</span>
             <span>·</span>
             <span>Next.js 16</span>

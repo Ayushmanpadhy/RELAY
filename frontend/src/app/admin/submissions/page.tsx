@@ -103,8 +103,8 @@ export default function AdminSubmissionsPage() {
                       {job.createdAt ? new Date(job.createdAt).toLocaleTimeString() : "-"}
                     </td>
                     <td className="p-4 font-mono font-semibold text-[var(--text)]">{job.id}</td>
-                    <td className="p-4 text-[var(--text)] font-medium max-w-xs truncate">
-                      {job.fullPrompt}
+                    <td className="p-4 text-[var(--text)] font-medium max-w-xs truncate" title={job.fullPrompt || job.promptPreview}>
+                      {job.fullPrompt || job.promptPreview || "-"}
                     </td>
                     <td className="p-4">
                       <span

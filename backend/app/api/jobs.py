@@ -18,6 +18,7 @@ from app.store.firestore import (
     _in_memory_store,
     get_job_internal,
     get_job_public,
+    get_user_jobs_public,
     log_event,
     set_job_internal,
     set_job_public,
@@ -190,10 +191,7 @@ async def create_job(
 async def list_my_jobs(
     current_user: Annotated[AuthUser, Depends(get_current_user)],
 ) -> list[dict[str, Any]]:
-    # Read from in-memory / Firestore store user-safe jobs
-    all_jobs = list(_in_memory_store.get("jobs", {}).values())
-    user_jobs = [j for j in all_jobs if j.get("userId") == current_user.uid]
-    user_jobs.sort(key=lambda j: j.get("createdAt", ""), reverse=True)
+    user_jobs = await get_user_jobs_public(current_user.uid, limit=100)
     return user_jobs
 
 

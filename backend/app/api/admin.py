@@ -10,6 +10,7 @@ from app.nodes.pool import node_pool
 from app.providers.registry import registry
 from app.store.firestore import (
     _in_memory_store,
+    get_all_jobs_internal,
     get_all_nodes,
     get_job_internal,
     get_parts,
@@ -46,7 +47,7 @@ async def get_overview() -> dict[str, Any]:
         st = n.get("state", "idle")
         node_counts[st] = node_counts.get(st, 0) + 1
 
-    all_jobs = list(_in_memory_store.get("jobs_internal", {}).values())
+    all_jobs = await get_all_jobs_internal(limit=200)
     active_jobs = sum(
         1 for j in all_jobs if j.get("status") in ("queued", "analyzing", "working", "assembling")
     )
@@ -89,7 +90,7 @@ async def list_admin_jobs(
     status_filter: str | None = Query(None, alias="status"),
     search: str | None = Query(None),
 ) -> list[dict[str, Any]]:
-    all_jobs = list(_in_memory_store.get("jobs_internal", {}).values())
+    all_jobs = await get_all_jobs_internal(limit=200)
     filtered = all_jobs
 
     if status_filter:

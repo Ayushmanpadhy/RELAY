@@ -13,6 +13,7 @@ from app.pipeline.scheduler import scheduler
 from app.providers.registry import registry
 from app.store.firestore import (
     _in_memory_store,
+    get_all_jobs_internal,
     get_parts,
     init_firestore,
     set_part,
@@ -63,7 +64,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await registry.run_probe()
 
     # Resume unfinished jobs
-    all_jobs = list(_in_memory_store.get("jobs_internal", {}).values())
+    all_jobs = await get_all_jobs_internal(limit=100)
+    logger.info("Loaded %d jobs from Firestore.", len(all_jobs))
     for j in all_jobs:
         job_id = j.get("id")
         status = j.get("status")

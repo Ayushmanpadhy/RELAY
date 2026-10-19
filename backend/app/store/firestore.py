@@ -425,6 +425,59 @@ async def get_job_internal(job_id: str) -> dict[str, Any] | None:
     return cast(dict[str, Any] | None, _in_memory_store.get("jobs_internal", {}).get(job_id))
 
 
+async def get_all_jobs_internal(limit: int = 200) -> list[dict[str, Any]]:
+    jobs_map: dict[str, dict[str, Any]] = dict(_in_memory_store.get("jobs_internal", {}))
+    if is_firestore_connected() and _db is not None:
+        try:
+            docs = (
+                _db.collection("jobs_internal")
+                .order_by("createdAt", direction=firestore.Query.DESCENDING)
+                .limit(limit)
+                .stream()
+            )
+            for d in docs:
+                data = d.to_dict()
+                j_id = data.get("id") or d.id
+                if j_id not in jobs_map:
+                    jobs_map[j_id] = data
+                else:
+                    jobs_map[j_id].update(data)
+        except Exception:
+            _log_offline_suppressed("stream all jobs internal")
+
+    all_jobs = list(jobs_map.values())
+    all_jobs.sort(key=lambda j: j.get("createdAt", ""), reverse=True)
+    return all_jobs[:limit]
+
+
+async def get_user_jobs_public(uid: str, limit: int = 100) -> list[dict[str, Any]]:
+    jobs_map: dict[str, dict[str, Any]] = {
+        k: v for k, v in _in_memory_store.get("jobs", {}).items() if v.get("userId") == uid
+    }
+    if is_firestore_connected() and _db is not None:
+        try:
+            # First try ordered query
+            docs = (
+                _db.collection("jobs")
+                .where("userId", "==", uid)
+                .limit(limit)
+                .stream()
+            )
+            for d in docs:
+                data = d.to_dict()
+                j_id = data.get("id") or d.id
+                if j_id not in jobs_map:
+                    jobs_map[j_id] = data
+                else:
+                    jobs_map[j_id].update(data)
+        except Exception:
+            _log_offline_suppressed("stream user jobs public")
+
+    user_jobs = list(jobs_map.values())
+    user_jobs.sort(key=lambda j: j.get("createdAt", ""), reverse=True)
+    return user_jobs[:limit]
+
+
 async def set_part(job_id: str, part_id: str, data: dict[str, Any]) -> None:
     key = f"{job_id}:{part_id}"
     _in_memory_store.setdefault("parts", {})[key] = dict(data)
