@@ -89,9 +89,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setToken(idToken);
           const adminClaim =
             Boolean(tokenResult.claims.admin) ||
-            currentUser.email?.toLowerCase() === "admin@gmail.com" ||
-            currentUser.email?.toLowerCase() === "padhyayusmanpadhy@gmail.com";
+            currentUser.email?.toLowerCase() === "admin@gmail.com";
           setIsAdmin(adminClaim);
+
         } catch {
           setToken(null);
           setIsAdmin(false);

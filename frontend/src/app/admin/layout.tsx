@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useEffect, Suspense } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import Link from "next/link";
 import {
   LayoutDashboard,
   Layers,
@@ -12,7 +11,8 @@ import {
   Users,
   LogOut,
   Radio,
-  ArrowLeft,
+  ShieldAlert,
+  Lock,
 } from "lucide-react";
 
 function AdminNav() {
@@ -52,8 +52,11 @@ function AdminNav() {
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, isAdmin, loading, signInWithEmail, signOut } = useAuth();
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", "dark");
@@ -61,9 +64,120 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const handleSignOut = async () => {
     await signOut();
-    router.push("/auth");
   };
 
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    setIsSubmitting(true);
+    try {
+      await signInWithEmail(adminEmail.trim(), adminPassword);
+    } catch (err: unknown) {
+      setAuthError(
+        err instanceof Error
+          ? err.message
+          : "Invalid administrator credentials. Access restricted."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // 1. Loading gate
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center text-xs font-mono text-[var(--dim)]">
+        <div className="flex flex-col items-center gap-3">
+          <span className="w-5 h-5 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin" />
+          <span>Verifying Administrator Authorization...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Private Admin Authentication Gate (Unauthorized users cannot view console)
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] flex flex-col justify-center items-center px-4 relative overflow-hidden font-sans">
+        {/* Glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[radial-gradient(circle,rgba(99,102,241,0.12)_0%,transparent_70%)] pointer-events-none" />
+
+        <div className="w-full max-w-md bg-[var(--surface)] border border-[var(--line)] rounded-2xl p-8 relative shadow-2xl">
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-[rgba(99,102,241,0.12)] border border-[rgba(99,102,241,0.25)] flex items-center justify-center text-[var(--accent)] mb-4 shadow-[0_0_20px_rgba(99,102,241,0.2)]">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <h1 className="text-xl font-bold tracking-tight">Private Administrator Console</h1>
+            <p className="text-xs text-[var(--dim)] mt-1.5 leading-relaxed">
+              Restricted access. Authorized system operators only. Please enter the administrator email and password to proceed.
+            </p>
+          </div>
+
+          {authError && (
+            <div className="mb-4 p-3 rounded-xl bg-[rgba(255,107,107,0.1)] border border-[var(--bad)] text-[var(--bad)] text-xs font-mono">
+              {authError}
+            </div>
+          )}
+
+          {user && (
+            <div className="mb-4 p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs text-[var(--dim)] flex items-center justify-between">
+              <div className="truncate mr-2">
+                Signed in as <strong className="text-[var(--text)]">{user.email}</strong> (User Account).
+              </div>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="text-[11px] font-mono text-[var(--accent)] hover:underline shrink-0"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+
+          <form onSubmit={handleAdminLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-mono uppercase text-[var(--dim)] mb-1.5">
+                Admin Email
+              </label>
+              <input
+                type="email"
+                required
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                placeholder="admin@gmail.com"
+                className="w-full bg-[var(--surface-2)] border border-[var(--line)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-colors font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono uppercase text-[var(--dim)] mb-1.5">
+                Admin Password
+              </label>
+              <input
+                type="password"
+                required
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="••••••••••••"
+                className="w-full bg-[var(--surface-2)] border border-[var(--line)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-colors font-mono"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-2.5 rounded-xl bg-[var(--accent)] hover:opacity-90 text-black font-semibold text-xs tracking-wide transition-all cursor-pointer disabled:opacity-50 mt-2 flex items-center justify-center gap-2"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>{isSubmitting ? "Authenticating..." : "Unlock Administrator Console"}</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Authenticated Admin Console View
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] flex font-sans selection:bg-[var(--accent)] selection:text-black">
       {/* Sidebar */}
@@ -123,14 +237,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </span>
           </div>
           <div className="flex items-center gap-4 text-xs font-mono text-[var(--dim)]">
-            <Link
-              href="/app"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] hover:bg-[var(--line)] text-[var(--text)] transition-colors text-xs font-sans font-medium"
-              title="Switch to User Workspace"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>User App</span>
-            </Link>
             <span>FastAPI v4.0.0</span>
             <span>·</span>
             <span>Next.js 16</span>

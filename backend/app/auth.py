@@ -48,9 +48,9 @@ def verify_token_string(token: str) -> AuthUser:
         is_admin = bool(decoded_token.get("admin", False))
         admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAIL.split(",") if e.strip()}
         admin_emails.add("admin@gmail.com")
-        admin_emails.add("padhyayusmanpadhy@gmail.com")
         if email and email.lower() in admin_emails:
             is_admin = True
+
 
         return AuthUser(
             uid=uid,
