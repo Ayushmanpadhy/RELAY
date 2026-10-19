@@ -75,16 +75,17 @@ export default function AdminSubmissionsPage() {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-[var(--line)] bg-[var(--surface-2)] text-[var(--dim)] font-mono uppercase tracking-wider text-[11px]">
-                <th className="p-4">Time</th>
-                <th className="p-4">Job ID</th>
-                <th className="p-4">Prompt Excerpt</th>
-                <th className="p-4">Mode</th>
-                <th className="p-4">Parts</th>
-                <th className="p-4">Status</th>
-                <th className="p-4">Reassigned</th>
-                <th className="p-4 text-right">Actions</th>
+                <th className="p-4 w-28 whitespace-nowrap">Time</th>
+                <th className="p-4 w-48 whitespace-nowrap">Job ID</th>
+                <th className="p-4 min-w-[200px]">Prompt Excerpt</th>
+                <th className="p-4 w-20 whitespace-nowrap">Mode</th>
+                <th className="p-4 w-20 whitespace-nowrap">Parts</th>
+                <th className="p-4 w-32 whitespace-nowrap">Status</th>
+                <th className="p-4 w-24 whitespace-nowrap">Reassigned</th>
+                <th className="p-4 w-24 text-right whitespace-nowrap">Actions</th>
               </tr>
             </thead>
+
             <tbody className="divide-y divide-[var(--line)]">
               {filteredJobs.length === 0 ? (
                 <tr>

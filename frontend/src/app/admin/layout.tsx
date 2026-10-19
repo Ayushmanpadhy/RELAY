@@ -179,12 +179,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // 3. Authenticated Admin Console View
   return (
-    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] flex font-sans selection:bg-[var(--accent)] selection:text-black">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-[var(--line)] bg-[var(--surface)] flex flex-col justify-between shrink-0">
-        <div>
+    <div className="h-screen w-screen overflow-hidden bg-[var(--bg)] text-[var(--text)] flex font-sans selection:bg-[var(--accent)] selection:text-black">
+      {/* Sidebar: Strictly FIXED height, NEVER scrolls with main content */}
+      <aside className="w-64 h-screen border-r border-[var(--line)] bg-[var(--surface)] flex flex-col justify-between shrink-0 z-20 overflow-hidden select-none">
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
           {/* Brand */}
-          <div className="h-16 border-b border-[var(--line)] px-6 flex items-center justify-between">
+          <div className="h-16 border-b border-[var(--line)] px-6 flex items-center justify-between shrink-0">
             <span className="font-semibold text-lg flex items-center gap-2.5 tracking-wide">
               <i className="w-2.5 h-2.5 rounded-full bg-[var(--accent)] shadow-[0_0_10px_var(--accent)] inline-block" />
               <span>Relay Admin</span>
@@ -196,13 +196,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
 
           {/* Navigation Links wrapped in Suspense */}
-          <Suspense fallback={<div className="p-4 text-xs font-mono text-[var(--dim)]">Loading navigation...</div>}>
-            <AdminNav />
-          </Suspense>
+          <div className="flex-1 overflow-y-auto">
+            <Suspense fallback={<div className="p-4 text-xs font-mono text-[var(--dim)]">Loading navigation...</div>}>
+              <AdminNav />
+            </Suspense>
+          </div>
         </div>
 
-        {/* Admin profile footer & sign out */}
-        <div className="p-4 border-t border-[var(--line)] flex items-center justify-between bg-[var(--surface-2)]/30">
+        {/* Admin profile footer & sign out - Fixed at bottom of sidebar */}
+        <div className="p-4 border-t border-[var(--line)] flex items-center justify-between bg-[var(--surface-2)]/30 shrink-0">
           <div className="truncate mr-2">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-[var(--ok)] shadow-[0_0_6px_var(--ok)]" />
@@ -224,9 +226,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <header className="h-16 border-b border-[var(--line)] bg-[rgba(18,21,28,0.7)] backdrop-blur-md px-8 flex items-center justify-between sticky top-0 z-10">
+      {/* Main Content Area: ONLY this panel scrolls */}
+      <div className="flex-1 h-screen flex flex-col min-w-0 overflow-y-auto overflow-x-hidden">
+        <header className="h-16 border-b border-[var(--line)] bg-[rgba(18,21,28,0.85)] backdrop-blur-md px-8 flex items-center justify-between sticky top-0 z-10 shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-xs font-mono text-[var(--dim)] uppercase tracking-wider">
               Platform Status:
@@ -248,3 +250,4 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </div>
   );
 }
+

@@ -430,9 +430,10 @@ _last_fs_jobs_sync: float = 0.0
 
 async def get_all_jobs_internal(limit: int = 200) -> list[dict[str, Any]]:
     global _last_fs_jobs_sync
-    jobs_map: dict[str, dict[str, Any]] = dict(_in_memory_store.get("jobs_internal", {}))
+    mem_jobs = _in_memory_store.setdefault("jobs_internal", {})
     now = time.time()
-    if is_firestore_connected() and _db is not None and (now - _last_fs_jobs_sync > 3.0 or not jobs_map):
+    # Always query Firestore if mem_jobs has fewer than expected or on periodic refresh
+    if is_firestore_connected() and _db is not None and (now - _last_fs_jobs_sync > 4.0 or len(mem_jobs) == 0):
         try:
             docs = (
                 _db.collection("jobs_internal")
@@ -443,27 +444,25 @@ async def get_all_jobs_internal(limit: int = 200) -> list[dict[str, Any]]:
             for d in docs:
                 data = d.to_dict()
                 j_id = data.get("id") or d.id
-                if j_id not in jobs_map:
-                    jobs_map[j_id] = data
+                if j_id in mem_jobs and isinstance(mem_jobs[j_id], dict):
+                    mem_jobs[j_id].update(data)
                 else:
-                    jobs_map[j_id].update(data)
+                    mem_jobs[j_id] = data
             _last_fs_jobs_sync = now
         except Exception:
             _log_offline_suppressed("stream all jobs internal")
 
-    all_jobs = list(jobs_map.values())
+    all_jobs = list(mem_jobs.values())
     all_jobs.sort(key=lambda j: j.get("createdAt", ""), reverse=True)
     return all_jobs[:limit]
 
 
 
+
 async def get_user_jobs_public(uid: str, limit: int = 100) -> list[dict[str, Any]]:
-    jobs_map: dict[str, dict[str, Any]] = {
-        k: v for k, v in _in_memory_store.get("jobs", {}).items() if v.get("userId") == uid
-    }
+    mem_public = _in_memory_store.setdefault("jobs", {})
     if is_firestore_connected() and _db is not None:
         try:
-            # First try ordered query
             docs = (
                 _db.collection("jobs")
                 .where("userId", "==", uid)
@@ -473,16 +472,17 @@ async def get_user_jobs_public(uid: str, limit: int = 100) -> list[dict[str, Any
             for d in docs:
                 data = d.to_dict()
                 j_id = data.get("id") or d.id
-                if j_id not in jobs_map:
-                    jobs_map[j_id] = data
+                if j_id in mem_public and isinstance(mem_public[j_id], dict):
+                    mem_public[j_id].update(data)
                 else:
-                    jobs_map[j_id].update(data)
+                    mem_public[j_id] = data
         except Exception:
             _log_offline_suppressed("stream user jobs public")
 
-    user_jobs = list(jobs_map.values())
+    user_jobs = [v for v in mem_public.values() if v.get("userId") == uid]
     user_jobs.sort(key=lambda j: j.get("createdAt", ""), reverse=True)
     return user_jobs[:limit]
+
 
 
 async def set_part(job_id: str, part_id: str, data: dict[str, Any]) -> None:

@@ -88,6 +88,23 @@ body {
   }
 }
 
+/* Sleek custom dark scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #232836;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a4154;
+}
+
+
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(root) {
     animation: fade-out 300ms ease;
