@@ -1,51 +1,56 @@
-# Stage 1: Build all workspaces
-FROM node:22-alpine AS builder
+# syntax=docker/dockerfile:1.4
+FROM python:3.12-slim-bookworm AS builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install python dependencies into virtualenv
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY backend/pyproject.toml ./pyproject.toml
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir .
+
+# ==========================================
+# Runtime Stage: Small, secure, non-root
+# ==========================================
+FROM python:3.12-slim-bookworm AS runner
+
+# Security: create non-root user and group
+RUN groupadd -g 10001 relaygroup && \
+    useradd -u 10001 -g relaygroup -s /bin/bash -m relayuser
 
 WORKDIR /app
 
-# Copy package manifests for workspace caching
-COPY package.json package-lock.json* ./
-COPY packages/shared/package.json ./packages/shared/
-COPY apps/server/package.json ./apps/server/
-COPY apps/web/package.json ./apps/web/
+# Copy virtualenv from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    APP_ENV=production \
+    PORT=8000
 
-# Install dependencies including build tools
-RUN npm ci
+# Copy application source code
+COPY --chown=relayuser:relaygroup backend/app/ /app/app/
+COPY --chown=relayuser:relaygroup backend/pyproject.toml /app/
 
-# Copy full repository source
-COPY . .
+# Setup persistent data and secret directories
+RUN mkdir -p /app/data/uploads /app/secrets && \
+    chown -R relayuser:relaygroup /app
 
-# Build shared types, server, and web frontend
-RUN npm run build
+USER relayuser:relaygroup
 
-# Stage 2: Minimal production runtime
-FROM node:22-alpine AS runner
+VOLUME ["/app/data"]
 
-WORKDIR /app
+EXPOSE 8000
 
-ENV NODE_ENV=production
-ENV PORT=4000
-ENV HOST=0.0.0.0
-ENV DATA_DIR=/data
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/api/health/ready || exit 1
 
-# Copy package manifests for production install
-COPY package.json package-lock.json* ./
-COPY packages/shared/package.json ./packages/shared/
-COPY apps/server/package.json ./apps/server/
-COPY apps/web/package.json ./apps/web/
-
-RUN npm ci --omit=dev
-
-# Copy compiled artifacts from builder
-COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-COPY --from=builder /app/apps/server/dist ./apps/server/dist
-COPY --from=builder /app/apps/web/dist ./apps/web/dist
-
-# Create persistent data directory
-RUN mkdir -p /data
-
-VOLUME ["/data"]
-
-EXPOSE 4000
-
-CMD ["node", "apps/server/dist/index.js"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
