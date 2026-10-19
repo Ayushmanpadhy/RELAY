@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     # Firebase
     FIREBASE_PROJECT_ID: str = "relay"
     GOOGLE_APPLICATION_CREDENTIALS: str = "./secrets/firebase-service-account.json"
+    FIREBASE_SERVICE_ACCOUNT_JSON: str = ""
     FRONTEND_ORIGIN: str = "http://localhost:3000"
 
     # Admin

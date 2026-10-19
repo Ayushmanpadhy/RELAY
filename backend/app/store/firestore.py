@@ -178,20 +178,33 @@ def init_firestore() -> Any:
             _db_status = "UNAVAILABLE"
             return None
 
-    if not os.path.exists(cred_path):
-        _db_status = "CREDENTIALS_INVALID"
-        _db_error_reason = f"Firebase credentials file not found at {cred_path}"
-        if not _db_error_logged:
-            logger.warning("%s. Operating with in-memory fallback.", _db_error_reason)
-            _db_error_logged = True
-        return None
+    sa_data = None
+    cred_path = os.path.abspath(settings.GOOGLE_APPLICATION_CREDENTIALS) if settings.GOOGLE_APPLICATION_CREDENTIALS else ""
 
-    try:
-        with open(cred_path, "r", encoding="utf-8") as f:
-            sa_data = json.load(f)
-    except Exception as e:
+    if settings.FIREBASE_SERVICE_ACCOUNT_JSON and settings.FIREBASE_SERVICE_ACCOUNT_JSON.strip():
+        try:
+            sa_data = json.loads(settings.FIREBASE_SERVICE_ACCOUNT_JSON)
+        except Exception as e:
+            _db_status = "CREDENTIALS_INVALID"
+            _db_error_reason = f"Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON: {e}"
+            if not _db_error_logged:
+                logger.warning("%s. Operating with in-memory fallback.", _db_error_reason)
+                _db_error_logged = True
+            return None
+    elif cred_path and os.path.exists(cred_path):
+        try:
+            with open(cred_path, "r", encoding="utf-8") as f:
+                sa_data = json.load(f)
+        except Exception as e:
+            _db_status = "CREDENTIALS_INVALID"
+            _db_error_reason = f"Failed to parse Firebase credentials JSON at {cred_path}: {e}"
+            if not _db_error_logged:
+                logger.warning("%s. Operating with in-memory fallback.", _db_error_reason)
+                _db_error_logged = True
+            return None
+    else:
         _db_status = "CREDENTIALS_INVALID"
-        _db_error_reason = f"Failed to parse Firebase credentials JSON: {e}"
+        _db_error_reason = f"Firebase credentials file not found at {cred_path} and FIREBASE_SERVICE_ACCOUNT_JSON is unset"
         if not _db_error_logged:
             logger.warning("%s. Operating with in-memory fallback.", _db_error_reason)
             _db_error_logged = True
@@ -225,7 +238,7 @@ def init_firestore() -> Any:
         return None
 
     try:
-        cred = credentials.Certificate(cred_path)
+        cred = credentials.Certificate(sa_data if sa_data else cred_path)
         if not firebase_admin._apps:
             firebase_admin.initialize_app(cred, {"projectId": settings.FIREBASE_PROJECT_ID})
         client = firestore.client()

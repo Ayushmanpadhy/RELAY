@@ -6,10 +6,6 @@ services:
     dockerContext: backend
     plan: free
     region: singapore
-    disk:
-      name: relay-data
-      mountPath: /app/data
-      sizeGB: 5
     healthCheckPath: /api/health/ready
     envVars:
       - key: APP_ENV
