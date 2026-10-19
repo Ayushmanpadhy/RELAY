@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
-import { fetchWithAuth } from "@/lib/api";
+import { fetchWithAuth, SERVER_ROOT_URL } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -69,10 +69,8 @@ export default function RequestProgressPage() {
     e.preventDefault();
     setDownloadingFile(file.name);
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api";
-      const normalizedBase = apiBase.replace(/\/api$/, "");
       const downloadPath = file.downloadUrl.startsWith("/") ? file.downloadUrl : `/${file.downloadUrl}`;
-      const url = `${normalizedBase}${downloadPath}`;
+      const url = `${SERVER_ROOT_URL}${downloadPath}`;
 
       const res = await fetch(url, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},

@@ -1,4 +1,8 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api";
+const RAW_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api").trim().replace(/\/+$/, "");
+export const API_BASE_URL = RAW_BASE_URL.endsWith("/api")
+  ? RAW_BASE_URL
+  : `${RAW_BASE_URL}/api`;
+export const SERVER_ROOT_URL = API_BASE_URL.replace(/\/api$/, "");
 
 export interface ApiError extends Error {
   status?: number;
