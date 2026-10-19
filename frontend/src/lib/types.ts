@@ -10,6 +10,24 @@ export interface JobResult {
   files?: ResultFile[];
 }
 
+export interface TaskIteration {
+  id: string;
+  iteration: number;
+  promptPreview?: string;
+  fullPrompt?: string;
+  status: "queued" | "analyzing" | "working" | "assembling" | "done" | "failed";
+  progress?: number;
+  stepLabel?: string;
+  mode?: "exact" | "ai";
+  partCount?: number;
+  createdAt?: string;
+  finishedAt?: string | null;
+  result?: JobResult | null;
+  stats?: Record<string, unknown>;
+  job?: JobRecord;
+  parts?: PartRecord[];
+}
+
 export interface JobRecord {
   id: string;
   userId?: string;
@@ -27,6 +45,14 @@ export interface JobRecord {
   partCount?: number;
   reassignments?: number;
   crashedAttempts?: number;
+  rootJobId?: string | null;
+  parentJobId?: string | null;
+  iteration?: number;
+  iterationCount?: number;
+  iterations?: TaskIteration[];
+  latestJobId?: string;
+  latestStatus?: string;
+  latestPrompt?: string;
   plan?: {
     intent?: string;
     mode?: "exact" | "ai";

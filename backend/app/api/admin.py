@@ -16,6 +16,8 @@ from app.store.firestore import (
     get_parts,
     get_recent_events,
     get_settings,
+    get_submission_iterations,
+    group_jobs_into_submissions,
     log_event,
     update_settings,
 )
@@ -123,7 +125,8 @@ async def list_admin_jobs(
     search: str | None = Query(None),
 ) -> list[dict[str, Any]]:
     all_jobs = await get_all_jobs_internal(limit=200)
-    filtered = all_jobs
+    submissions = group_jobs_into_submissions(all_jobs)
+    filtered = submissions
 
     if status_filter:
         filtered = [j for j in filtered if j.get("status") == status_filter]
@@ -132,10 +135,21 @@ async def list_admin_jobs(
         filtered = [
             j
             for j in filtered
-            if s_lower in j.get("id", "").lower() or s_lower in j.get("fullPrompt", "").lower()
+            if s_lower in j.get("id", "").lower()
+            or s_lower in (j.get("fullPrompt") or "").lower()
+            or s_lower in (j.get("userId") or "").lower()
+            or any(
+                s_lower in (it.get("fullPrompt") or "").lower()
+                for it in j.get("iterations", [])
+            )
         ]
 
-    filtered.sort(key=lambda j: j.get("createdAt", ""), reverse=True)
+    filtered.sort(
+        key=lambda j: (
+            j.get("iterations", [{}])[-1].get("createdAt") or j.get("createdAt", "")
+        ),
+        reverse=True,
+    )
     return filtered
 
 
@@ -146,9 +160,26 @@ async def get_admin_job_detail(job_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
     parts = await get_parts(job_id)
+    iterations = await get_submission_iterations(job_id)
+
+    detailed_iterations = []
+    for it in iterations:
+        it_id = it.get("id")
+        it_parts = await get_parts(it_id) if it_id != job_id else parts
+        detailed_iterations.append(
+            {
+                "job": it,
+                "parts": it_parts,
+            }
+        )
+
     return {
         "job": job_int,
         "parts": parts,
+        "rootJobId": job_int.get("rootJobId") or job_int.get("id"),
+        "iteration": job_int.get("iteration", 1),
+        "iterationCount": len(detailed_iterations) if detailed_iterations else 1,
+        "iterations": detailed_iterations,
     }
 
 

@@ -10,18 +10,29 @@ import {
   ArrowLeft,
   ChevronDown,
   ChevronRight,
+  Layers,
 } from "lucide-react";
 import { JobRecord, PartRecord, PartAttempt } from "@/lib/types";
+
+interface IterationDetail {
+  job: JobRecord;
+  parts: PartRecord[];
+}
 
 interface JobDetailResponse {
   job: JobRecord;
   parts: PartRecord[];
+  rootJobId?: string;
+  iteration?: number;
+  iterationCount?: number;
+  iterations?: IterationDetail[];
 }
 
 export default function AdminJobDetailPage() {
   const params = useParams();
   const jobId = params?.id as string;
   const { token } = useAdminAuth();
+  const [selectedIterationId, setSelectedIterationId] = useState<string>(jobId);
   const [expandedPartId, setExpandedPartId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"plan" | "parts" | "outputs" | "result">("parts");
 
@@ -30,13 +41,25 @@ export default function AdminJobDetailPage() {
     queryFn: () => fetchWithAuth<JobDetailResponse>(`/admin/jobs/${jobId}`, token),
     enabled: Boolean(jobId && token),
     refetchInterval: (query) => {
-      const job = query.state.data?.job;
-      return job?.status === "done" || job?.status === "failed" ? false : 1500;
+      const resp = query.state.data;
+      if (!resp) return 1500;
+      const anyRunning =
+        resp.iterations?.some(
+          (it) => it.job.status !== "done" && it.job.status !== "failed"
+        ) ||
+        (resp.job.status !== "done" && resp.job.status !== "failed");
+      return anyRunning ? 1500 : false;
     },
   });
 
-  const job = data?.job;
-  const parts: PartRecord[] = data?.parts || [];
+  const activeIteration =
+    data?.iterations?.find((it) => it.job.id === selectedIterationId) || {
+      job: data?.job,
+      parts: data?.parts || [],
+    };
+
+  const job = activeIteration.job;
+  const parts: PartRecord[] = activeIteration.parts || [];
 
   if (!job) {
     return (
@@ -47,6 +70,8 @@ export default function AdminJobDetailPage() {
   }
 
   const plan = job.plan || {};
+  const threadIterations = data?.iterations || [];
+  const hasMultipleTasks = threadIterations.length > 1;
 
   return (
     <div className="space-y-6">
@@ -59,8 +84,78 @@ export default function AdminJobDetailPage() {
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>All Submissions</span>
         </Link>
-        <span className="text-xs font-mono text-[var(--dim)]">Job ID: {jobId}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-mono text-[var(--dim)]">
+            Submission Root: {data?.rootJobId || job.rootJobId || job.id}
+          </span>
+          <span className="text-xs font-mono px-2 py-0.5 rounded bg-[var(--surface-2)] text-[var(--accent)] font-semibold">
+            Task ID: {job.id}
+          </span>
+        </div>
       </div>
+
+      {/* Submission Iterations Switcher Strip (If multiple tasks in thread) */}
+      {hasMultipleTasks && (
+        <div className="bg-[var(--surface)] p-5 rounded-2xl border border-[var(--line)] shadow-sm space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-[var(--accent)]" />
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-[var(--accent)]">
+                Submission Tasks ({threadIterations.length} In This Thread)
+              </span>
+            </div>
+            <span className="text-[11px] text-[var(--dim)]">
+              Select any task to inspect its partition, nodes, AI trail and outputs
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5 overflow-x-auto pb-1 scrollbar-thin">
+            {threadIterations.map((it, idx) => {
+              const itJob = it.job;
+              const isSelected = itJob.id === (selectedIterationId || data?.job?.id);
+              return (
+                <button
+                  key={itJob.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedIterationId(itJob.id);
+                    setExpandedPartId(null);
+                  }}
+                  className={`px-4 py-3 rounded-xl text-left border transition-all shrink-0 min-w-[240px] max-w-[320px] cursor-pointer ${
+                    isSelected
+                      ? "bg-[rgba(91,108,255,0.08)] border-[var(--accent)] shadow-sm text-[var(--text)]"
+                      : "bg-[var(--surface-2)] border-[var(--line)] text-[var(--dim)] hover:text-[var(--text)] hover:border-[var(--dim)]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[var(--accent)]">
+                      Task #{itJob.iteration || idx + 1}
+                    </span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase font-mono ${
+                        itJob.status === "done"
+                          ? "status-done"
+                          : itJob.status === "failed"
+                          ? "status-crashed"
+                          : "status-working"
+                      }`}
+                    >
+                      {itJob.status}
+                    </span>
+                  </div>
+                  <p className="text-xs font-medium truncate" title={itJob.fullPrompt || itJob.promptPreview}>
+                    {itJob.fullPrompt || itJob.promptPreview || "Untitled prompt"}
+                  </p>
+                  <div className="flex items-center justify-between mt-2 text-[10px] font-mono text-[var(--dim)]">
+                    <span>{itJob.partCount || it.parts?.length || 10} parts</span>
+                    <span>{itJob.createdAt ? new Date(itJob.createdAt).toLocaleTimeString() : ""}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Summary Stat Strip */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -70,7 +165,7 @@ export default function AdminJobDetailPage() {
         </div>
         <div className="bg-[var(--surface)] p-4 rounded-xl border border-[var(--line)]">
           <p className="text-[11px] font-mono text-[var(--dim)] uppercase">Parts Count</p>
-          <p className="text-lg font-bold font-mono text-[var(--text)]">{job.partCount}</p>
+          <p className="text-lg font-bold font-mono text-[var(--text)]">{job.partCount || parts.length}</p>
         </div>
         <div className="bg-[var(--surface)] p-4 rounded-xl border border-[var(--line)]">
           <p className="text-[11px] font-mono text-[var(--dim)] uppercase">Reassignments</p>
@@ -88,9 +183,14 @@ export default function AdminJobDetailPage() {
 
       {/* User Request Prompt Card */}
       <div className="bg-[var(--surface)] p-6 rounded-2xl border border-[var(--line)]">
-        <h3 className="text-xs font-mono text-[var(--dim)] uppercase tracking-wider mb-2">
-          User Submission Prompt
-        </h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-mono text-[var(--dim)] uppercase tracking-wider">
+            {hasMultipleTasks ? `Task #${job.iteration || 1} Prompt` : "User Submission Prompt"}
+          </h3>
+          <span className="text-[11px] font-mono text-[var(--dim)]">
+            Created: {job.createdAt ? new Date(job.createdAt).toLocaleString() : "-"}
+          </span>
+        </div>
         <p className="text-sm text-[var(--text)] leading-relaxed font-sans">{job.fullPrompt}</p>
       </div>
 

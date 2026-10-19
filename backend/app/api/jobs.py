@@ -18,7 +18,9 @@ from app.store.firestore import (
     _in_memory_store,
     get_job_internal,
     get_job_public,
+    get_submission_iterations,
     get_user_jobs_public,
+    group_jobs_into_submissions,
     log_event,
     set_job_internal,
     set_job_public,
@@ -82,11 +84,16 @@ async def create_job(
 
         # Check if follow-up on existing dataset
         parent_job: JobInternal | None = None
+        root_job_id = job_id
+        iteration_num = 1
+
         if parent_job_id:
             parent_raw = await get_job_internal(parent_job_id)
             if parent_raw and parent_raw.get("userId") == current_user.uid:
                 try:
                     parent_job = JobInternal.model_validate(parent_raw)
+                    root_job_id = parent_raw.get("rootJobId") or parent_raw.get("id") or parent_job_id
+                    iteration_num = (parent_raw.get("iteration") or 1) + 1
                 except Exception:
                     parent_job = None
 
@@ -145,6 +152,9 @@ async def create_job(
             progress=15,
             stepLabel=initial_label,
             createdAt=created_at,
+            rootJobId=root_job_id,
+            parentJobId=parent_job_id if parent_job else None,
+            iteration=iteration_num,
         )
         await set_job_internal(job_id, job_int.model_dump())
 
@@ -158,12 +168,15 @@ async def create_job(
             createdAt=created_at,
             clarifyingQuestions=plan.clarifyingQuestions,
             fileCount=len(manifest.files) if manifest else 0,
+            rootJobId=root_job_id,
+            parentJobId=parent_job_id if parent_job else None,
+            iteration=iteration_num,
         )
         await set_job_public(job_id, job_pub.model_dump())
 
         await log_event(
             "INFO",
-            f"Job {job_id} submitted by {current_user.email} ({plan.mode} mode, {len(parts)} parts)",
+            f"Job {job_id} submitted by {current_user.email} (Iteration {iteration_num}, {plan.mode} mode, {len(parts)} parts)",
             job_id=job_id,
         )
 
@@ -171,7 +184,13 @@ async def create_job(
         if not has_questions:
             scheduler.start_job(job_id)
 
-        return {"jobId": job_id, "status": initial_status, "partCount": len(parts)}
+        return {
+            "jobId": job_id,
+            "rootJobId": root_job_id,
+            "iteration": iteration_num,
+            "status": initial_status,
+            "partCount": len(parts),
+        }
 
     except IntakeError as e:
         raise HTTPException(
@@ -192,7 +211,8 @@ async def list_my_jobs(
     current_user: Annotated[AuthUser, Depends(get_current_user)],
 ) -> list[dict[str, Any]]:
     user_jobs = await get_user_jobs_public(current_user.uid, limit=100)
-    return user_jobs
+    submissions = group_jobs_into_submissions(user_jobs)
+    return submissions
 
 
 @router.get("/{job_id}")
@@ -213,9 +233,31 @@ async def get_job(
             detail={"error": {"code": "forbidden", "message": "Access denied"}},
         )
 
+    iterations = await get_submission_iterations(job_id)
+    iterations_summary = []
+    for it in iterations:
+        iterations_summary.append(
+            {
+                "id": it.get("id"),
+                "iteration": it.get("iteration") or 1,
+                "promptPreview": it.get("promptPreview")
+                or ((it.get("fullPrompt") or "")[:120]),
+                "fullPrompt": it.get("fullPrompt") or it.get("promptPreview") or "",
+                "status": it.get("status"),
+                "progress": it.get("progress", 0),
+                "stepLabel": it.get("stepLabel", ""),
+                "createdAt": it.get("createdAt"),
+                "finishedAt": it.get("finishedAt"),
+                "result": it.get("result"),
+            }
+        )
+
     # Return USER-SAFE view only: never contain plan, parts, nodes, providers, tools or raw errors
     return {
         "id": job_pub.get("id"),
+        "rootJobId": job_pub.get("rootJobId") or job_pub.get("id"),
+        "parentJobId": job_pub.get("parentJobId"),
+        "iteration": job_pub.get("iteration", 1),
         "status": job_pub.get("status"),
         "progress": job_pub.get("progress", 0),
         "stepLabel": job_pub.get("stepLabel", ""),
@@ -224,6 +266,9 @@ async def get_job(
         "result": job_pub.get("result"),
         "promptPreview": job_pub.get("promptPreview"),
         "clarifyingQuestions": job_pub.get("clarifyingQuestions", []),
+        "fileCount": job_pub.get("fileCount", 0),
+        "iterationCount": len(iterations_summary) if iterations_summary else 1,
+        "iterations": iterations_summary,
     }
 
 

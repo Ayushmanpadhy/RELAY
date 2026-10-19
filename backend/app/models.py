@@ -87,6 +87,12 @@ class JobPublic(BaseModel):
     result: JobResult | None = None
     clarifyingQuestions: list[str] = Field(default_factory=list)
     fileCount: int = 0
+    rootJobId: str | None = None
+    parentJobId: str | None = None
+    iteration: int = 1
+    iterationCount: int = 1
+    iterations: list[dict[str, Any]] = Field(default_factory=list)
+    latestJobId: str | None = None
 
 
 class JobInternal(BaseModel):
@@ -110,3 +116,9 @@ class JobInternal(BaseModel):
     finishedAt: str | None = None
     result: JobResult | None = None
     error: str | None = None
+    rootJobId: str | None = None
+    parentJobId: str | None = None
+    iteration: int = 1
+    iterationCount: int = 1
+    iterations: list[dict[str, Any]] = Field(default_factory=list)
+    latestJobId: str | None = None

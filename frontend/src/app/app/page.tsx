@@ -306,21 +306,28 @@ export default function UserHomePage() {
               {myJobs.map((job: JobRecord) => (
                 <Link
                   key={job.id}
-                  href={`/app/r/${job.id}`}
+                  href={`/app/r/${job.latestJobId || job.id}`}
                   className="bg-[var(--surface)] hover:bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--dim)] rounded-[20px] p-5 transition-all transform hover:-translate-y-0.5 shadow-sm"
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <span
-                      className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                        job.status === "done"
-                          ? "status-done"
-                          : job.status === "failed"
-                          ? "status-crashed"
-                          : "status-working"
-                      }`}
-                    >
-                      {job.stepLabel || job.status}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                          job.status === "done"
+                            ? "status-done"
+                            : job.status === "failed"
+                            ? "status-crashed"
+                            : "status-working"
+                        }`}
+                      >
+                        {job.stepLabel || job.status}
+                      </span>
+                      {Boolean(job.iterationCount && job.iterationCount > 1) && (
+                        <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[rgba(91,108,255,0.12)] text-[var(--accent)] font-semibold border border-[rgba(91,108,255,0.25)]">
+                          {job.iterationCount} tasks
+                        </span>
+                      )}
+                    </div>
                     <span className="text-xs text-[var(--dim)] font-mono">
                       {job.createdAt ? new Date(job.createdAt).toLocaleDateString() : ""}
                     </span>
@@ -329,8 +336,12 @@ export default function UserHomePage() {
                     {job.promptPreview || "Untitled Request"}
                   </p>
                   <div className="flex items-center justify-between text-xs text-[var(--dim)] font-mono">
-                    <span>Progress: {job.progress}%</span>
-                    <span className="text-[var(--accent)] font-sans font-medium">View Result →</span>
+                    <span>
+                      {job.iterationCount && job.iterationCount > 1
+                        ? `${job.iterationCount} related tasks`
+                        : `Progress: ${job.progress}%`}
+                    </span>
+                    <span className="text-[var(--accent)] font-sans font-medium">Open Submission →</span>
                   </div>
                 </Link>
               ))}

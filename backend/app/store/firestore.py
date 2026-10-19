@@ -484,6 +484,127 @@ async def get_user_jobs_public(uid: str, limit: int = 100) -> list[dict[str, Any
     return user_jobs[:limit]
 
 
+def group_jobs_into_submissions(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Groups individual job runs that belong to the same parent/thread into a single
+    Submission entry. If the user prompts 4-5 times for the same task, all iterations
+    are unified under the root submission.
+    """
+    if not jobs:
+        return []
+
+    jobs_by_id: dict[str, dict[str, Any]] = {j.get("id"): j for j in jobs if j.get("id")}
+
+    def find_root_id(j: dict[str, Any]) -> str:
+        if j.get("rootJobId"):
+            return str(j["rootJobId"])
+        curr = j
+        visited = set()
+        while (
+            curr.get("parentJobId")
+            and curr["parentJobId"] in jobs_by_id
+            and curr["parentJobId"] not in visited
+        ):
+            visited.add(curr.get("id"))
+            curr = jobs_by_id[curr["parentJobId"]]
+            if curr.get("rootJobId"):
+                return str(curr["rootJobId"])
+        return str(curr.get("id") or "")
+
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for j in jobs:
+        rid = find_root_id(j) or str(j.get("id") or "")
+        groups.setdefault(rid, []).append(j)
+
+    submissions: list[dict[str, Any]] = []
+    for rid, group in groups.items():
+        # Sort chronologically by iteration then createdAt
+        group.sort(key=lambda x: (x.get("iteration") or 1, str(x.get("createdAt") or "")))
+        root_job = next((j for j in group if j.get("id") == rid), group[0])
+        latest_job = group[-1]
+
+        iterations_summary = []
+        for idx, it in enumerate(group):
+            iterations_summary.append(
+                {
+                    "id": it.get("id"),
+                    "iteration": it.get("iteration") or (idx + 1),
+                    "fullPrompt": it.get("fullPrompt") or it.get("promptPreview") or "",
+                    "promptPreview": it.get("promptPreview")
+                    or ((it.get("fullPrompt") or "")[:120]),
+                    "status": it.get("status"),
+                    "progress": it.get("progress", 0),
+                    "stepLabel": it.get("stepLabel", ""),
+                    "mode": it.get("mode", "ai"),
+                    "partCount": it.get("partCount", 0),
+                    "createdAt": it.get("createdAt"),
+                    "finishedAt": it.get("finishedAt"),
+                    "result": it.get("result"),
+                    "stats": it.get("stats", {}),
+                    "reassignments": it.get("reassignments", 0),
+                    "crashedAttempts": it.get("crashedAttempts", 0),
+                }
+            )
+
+        submission = dict(root_job)
+        submission["rootJobId"] = rid
+        submission["iterationCount"] = len(group)
+        submission["iterations"] = iterations_summary
+        submission["latestJobId"] = latest_job.get("id")
+        submission["latestStatus"] = latest_job.get("status")
+        submission["latestPrompt"] = latest_job.get("fullPrompt") or latest_job.get("promptPreview")
+        submission["reassignments"] = sum(it.get("reassignments", 0) for it in group)
+        submission["crashedAttempts"] = sum(it.get("crashedAttempts", 0) for it in group)
+
+        # Represent latest state on the card/row
+        submission["status"] = latest_job.get("status")
+        submission["progress"] = latest_job.get("progress", 0)
+        submission["stepLabel"] = latest_job.get("stepLabel", "")
+        if latest_job.get("result"):
+            submission["result"] = latest_job.get("result")
+        if latest_job.get("finishedAt"):
+            submission["finishedAt"] = latest_job.get("finishedAt")
+
+        submissions.append(submission)
+
+    submissions.sort(
+        key=lambda s: s.get("iterations", [{}])[-1].get("createdAt") or s.get("createdAt", ""),
+        reverse=True,
+    )
+    return submissions
+
+
+async def get_submission_iterations(job_id: str) -> list[dict[str, Any]]:
+    """
+    Given any job ID, finds all jobs in the same submission thread and returns them
+    in chronological order.
+    """
+    job_target = await get_job_internal(job_id) or await get_job_public(job_id)
+    if not job_target:
+        return []
+
+    root_id = job_target.get("rootJobId") or job_target.get("id") or job_id
+
+    # Gather from internal store (or public store)
+    mem_internal = _in_memory_store.get("jobs_internal", {})
+    mem_public = _in_memory_store.get("jobs", {})
+
+    all_ids = set(mem_internal.keys()) | set(mem_public.keys())
+    matching: list[dict[str, Any]] = []
+
+    for jid in all_ids:
+        j = mem_internal.get(jid) or mem_public.get(jid)
+        if not j:
+            continue
+        j_root = j.get("rootJobId") or j.get("id")
+        j_parent = j.get("parentJobId")
+        if j_root == root_id or j.get("id") == root_id or j_parent == root_id:
+            if not any(m.get("id") == j.get("id") for m in matching):
+                matching.append(dict(j))
+
+    matching.sort(key=lambda x: (x.get("iteration") or 1, str(x.get("createdAt") or "")))
+    return matching
+
 
 async def set_part(job_id: str, part_id: str, data: dict[str, Any]) -> None:
     key = f"{job_id}:{part_id}"

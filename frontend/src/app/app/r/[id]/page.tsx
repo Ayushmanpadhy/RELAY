@@ -19,6 +19,8 @@ import {
   MessageSquarePlus,
   Settings,
   User,
+  Layers,
+  History,
 } from "lucide-react";
 import { JobRecord, ResultFile } from "@/lib/types";
 import { UserProfileModal } from "@/components/UserProfileModal";
@@ -26,7 +28,8 @@ import { UserProfileModal } from "@/components/UserProfileModal";
 export default function RequestProgressPage() {
   const router = useRouter();
   const params = useParams();
-  const jobId = params?.id as string;
+  const initialJobId = params?.id as string;
+  const [activeJobId, setActiveJobId] = useState<string>(initialJobId);
   const { user, token } = useAuth();
   const [answers, setAnswers] = useState<string[]>([]);
   const [submittingAnswers, setSubmittingAnswers] = useState(false);
@@ -34,6 +37,12 @@ export default function RequestProgressPage() {
   const [isSubmittingFollowUp, setIsSubmittingFollowUp] = useState(false);
   const [followUpError, setFollowUpError] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    if (initialJobId) {
+      setActiveJobId(initialJobId);
+    }
+  }, [initialJobId]);
 
   const handleFollowUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,13 +54,15 @@ export default function RequestProgressPage() {
     try {
       const formData = new FormData();
       formData.append("prompt", followUpPrompt.trim());
-      formData.append("parent_job_id", jobId);
+      formData.append("parent_job_id", activeJobId);
 
-      const res = await fetchWithAuth<{ jobId: string }>("/jobs", token, {
+      const res = await fetchWithAuth<{ jobId: string; rootJobId?: string; iteration?: number }>("/jobs", token, {
         method: "POST",
         body: formData,
       });
 
+      setFollowUpPrompt("");
+      setActiveJobId(res.jobId);
       router.push(`/app/r/${res.jobId}`);
     } catch (err: unknown) {
       const msg =
@@ -59,6 +70,7 @@ export default function RequestProgressPage() {
           ? err.message
           : "Failed to submit follow-up. Please try again.";
       setFollowUpError(msg);
+    } finally {
       setIsSubmittingFollowUp(false);
     }
   };
@@ -104,9 +116,9 @@ export default function RequestProgressPage() {
 
   // Poll for job status every 1.5 seconds while running
   const { data: job, refetch } = useQuery<JobRecord>({
-    queryKey: ["job", jobId, token],
-    queryFn: () => fetchWithAuth<JobRecord>(`/jobs/${jobId}`, token),
-    enabled: Boolean(jobId && token),
+    queryKey: ["job", activeJobId, token],
+    queryFn: () => fetchWithAuth<JobRecord>(`/jobs/${activeJobId}`, token),
+    enabled: Boolean(activeJobId && token),
     refetchInterval: (query) => {
       const currentJob = query.state.data;
       if (currentJob?.status === "done" || currentJob?.status === "failed") {
@@ -121,7 +133,7 @@ export default function RequestProgressPage() {
     if (!answers.some((a) => a?.trim())) return;
     setSubmittingAnswers(true);
     try {
-      await fetchWithAuth(`/jobs/${jobId}/clarify`, token, {
+      await fetchWithAuth(`/jobs/${activeJobId}/clarify`, token, {
         method: "POST",
         body: JSON.stringify({ answers }),
       });
@@ -153,7 +165,7 @@ export default function RequestProgressPage() {
           </Link>
           <div className="flex items-center gap-3">
             <span className="hidden md:inline text-xs font-mono text-[var(--dim)] truncate max-w-[200px]">
-              {jobId}
+              {activeJobId}
             </span>
             <button
               onClick={() => setIsSettingsOpen(true)}
@@ -170,6 +182,63 @@ export default function RequestProgressPage() {
       </header>
 
       <main className="w-full max-w-[1440px] mx-auto px-6 md:px-10 lg:px-12 py-10">
+        {/* Submission Iteration History Chain */}
+        {Boolean(job?.iterations && job.iterations.length > 1) && (
+          <div className="bg-[var(--surface)] p-5 rounded-[22px] border border-[var(--line)] shadow-sm mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-3.5">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-[rgba(91,108,255,0.12)] flex items-center justify-center text-[var(--accent)] shrink-0">
+                  <Layers className="w-3.5 h-3.5" />
+                </div>
+                <h3 className="text-sm font-semibold text-[var(--text)]">
+                  Submission History ({job?.iterations?.length} Related Prompts)
+                </h3>
+              </div>
+              <p className="text-[11px] font-mono text-[var(--dim)]">
+                All changes stay organized in this single submission. Click any task to inspect its result.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 overflow-x-auto pb-1 scrollbar-thin">
+              {job?.iterations?.map((it, idx) => {
+                const isSelected = it.id === activeJobId;
+                return (
+                  <button
+                    key={it.id}
+                    type="button"
+                    onClick={() => setActiveJobId(it.id)}
+                    className={`px-3.5 py-2.5 rounded-xl text-left border transition-all shrink-0 min-w-[200px] max-w-[280px] cursor-pointer ${
+                      isSelected
+                        ? "bg-[rgba(91,108,255,0.08)] border-[var(--accent)] shadow-sm text-[var(--text)]"
+                        : "bg-[var(--surface-2)] border-[var(--line)] text-[var(--dim)] hover:text-[var(--text)] hover:border-[var(--dim)]"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[var(--accent)]">
+                        Task #{it.iteration || idx + 1}
+                      </span>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase font-mono ${
+                          it.status === "done"
+                            ? "bg-[rgba(74,222,154,0.15)] text-[var(--ok)]"
+                            : it.status === "failed"
+                            ? "bg-[rgba(216,67,75,0.15)] text-[var(--bad)]"
+                            : "bg-[rgba(91,108,255,0.15)] text-[var(--accent)]"
+                        }`}
+                      >
+                        {it.status}
+                      </span>
+                    </div>
+                    <p className="text-xs font-medium truncate" title={it.fullPrompt || it.promptPreview}>
+                      {it.fullPrompt || it.promptPreview || "Untitled prompt"}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* While Running Progress Ring */}
         {!isDone && !isFailed && (
           <div className="bg-[var(--surface)] rounded-[24px] p-10 border border-[var(--line)] shadow-[0_12px_40px_rgba(14,18,38,0.06)] text-center flex flex-col items-center">
