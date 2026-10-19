@@ -161,6 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setIsAdmin(false);
     setToken(null);
+    queryClient.clear();
   };
 
   const devSignInAsAdmin = () => {

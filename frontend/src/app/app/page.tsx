@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/context/AuthContext";
-import { transitionTheme } from "@/components/ThemeTransition";
 import { fetchWithAuth } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -13,12 +12,9 @@ import {
   X,
   FileText,
   ArrowRight,
-  LogOut,
   Sparkles,
   AlertCircle,
   Loader2,
-  Settings,
-  User,
 } from "lucide-react";
 
 import { JobRecord } from "@/lib/types";
@@ -35,7 +31,7 @@ const PLACEHOLDERS = [
 
 export default function UserHomePage() {
   const router = useRouter();
-  const { user, token, isAdmin, signOut } = useAuth();
+  const { user, token, loading } = useAuth();
   const [prompt, setPrompt] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -48,6 +44,13 @@ export default function UserHomePage() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", "light");
   }, []);
+
+  // Redirect to auth if unauthenticated
+  useEffect(() => {
+    if (!loading && !user && !token) {
+      router.push("/auth");
+    }
+  }, [loading, user, token, router]);
 
   // Rotate placeholders when idle
   useEffect(() => {
@@ -64,13 +67,6 @@ export default function UserHomePage() {
     queryFn: () => fetchWithAuth<JobRecord[]>("/jobs", token),
     enabled: Boolean(token),
   });
-
-  const handleSignOut = (e: React.MouseEvent) => {
-    transitionTheme("dark", e.nativeEvent, async () => {
-      await signOut();
-      router.push("/");
-    });
-  };
 
   const handleFileDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -143,7 +139,7 @@ export default function UserHomePage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface)] hover:bg-[var(--surface-2)] text-xs text-[var(--text)] transition-all cursor-pointer"
+              className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface)] hover:bg-[var(--surface-2)] text-xs text-[var(--text)] transition-all cursor-pointer shadow-sm"
               title="Account & Profile Settings"
             >
               <div className="w-5 h-5 rounded-full bg-[var(--accent)] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
@@ -152,25 +148,6 @@ export default function UserHomePage() {
               <span className="font-medium max-w-[140px] truncate" suppressHydrationWarning>
                 {user?.displayName || user?.email || "My Workspace"}
               </span>
-            </button>
-
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              title="Workspace & Model Settings"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface)] hover:bg-[var(--surface-2)] text-xs text-[var(--dim)] hover:text-[var(--text)] transition-all cursor-pointer"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Settings</span>
-            </button>
-
-
-            <button
-              onClick={handleSignOut}
-              title="Sign Out"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface)] hover:bg-[var(--surface-2)] text-xs text-[var(--dim)] hover:text-[var(--bad)] transition-all cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Sign out</span>
             </button>
           </div>
         </div>

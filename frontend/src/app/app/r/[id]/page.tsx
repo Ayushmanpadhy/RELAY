@@ -17,8 +17,6 @@ import {
   RotateCcw,
   Loader2,
   MessageSquarePlus,
-  Settings,
-  User,
   Layers,
   History,
 } from "lucide-react";
@@ -30,13 +28,20 @@ export default function RequestProgressPage() {
   const params = useParams();
   const initialJobId = params?.id as string;
   const [activeJobId, setActiveJobId] = useState<string>(initialJobId);
-  const { user, token } = useAuth();
+  const { user, token, loading } = useAuth();
   const [answers, setAnswers] = useState<string[]>([]);
   const [submittingAnswers, setSubmittingAnswers] = useState(false);
   const [followUpPrompt, setFollowUpPrompt] = useState("");
   const [isSubmittingFollowUp, setIsSubmittingFollowUp] = useState(false);
   const [followUpError, setFollowUpError] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Redirect to auth if unauthenticated
+  useEffect(() => {
+    if (!loading && !user && !token) {
+      router.push("/auth");
+    }
+  }, [loading, user, token, router]);
 
   useEffect(() => {
     if (initialJobId) {
@@ -169,12 +174,14 @@ export default function RequestProgressPage() {
             </span>
             <button
               onClick={() => setIsSettingsOpen(true)}
-              title="Account & Settings"
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface)] hover:bg-[var(--surface-2)] text-xs text-[var(--text)] transition-all cursor-pointer"
+              title="Account & Profile Settings"
+              className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface)] hover:bg-[var(--surface-2)] text-xs text-[var(--text)] transition-all cursor-pointer shadow-sm"
             >
-              <Settings className="w-3.5 h-3.5 text-[var(--dim)]" />
-              <span className="font-medium hidden sm:inline" suppressHydrationWarning>
-                {user?.displayName || "Settings"}
+              <div className="w-5 h-5 rounded-full bg-[var(--accent)] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                {(user?.displayName || user?.email || "U").substring(0, 1).toUpperCase()}
+              </div>
+              <span className="font-medium hidden sm:inline max-w-[140px] truncate" suppressHydrationWarning>
+                {user?.displayName || user?.email || "My Workspace"}
               </span>
             </button>
           </div>

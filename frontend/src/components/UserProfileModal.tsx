@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
   User,
@@ -24,6 +25,7 @@ interface UserProfileModalProps {
 }
 
 export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
+  const router = useRouter();
   const { user, signOut, updateDisplayName } = useAuth();
   const [activeTab, setActiveTab] = useState<"profile" | "preferences">("profile");
   const [displayNameInput, setDisplayNameInput] = useState(user?.displayName || "");
@@ -31,6 +33,22 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
   const [isSavingName, setIsSavingName] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await signOut();
+      onClose();
+      router.push("/auth");
+    } catch (err) {
+      console.error("Sign out error:", err);
+      onClose();
+      window.location.href = "/auth";
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   // Settings State (persisted in localStorage)
   const [defaultMode, setDefaultMode] = useState<"auto" | "tools">(() => {
@@ -321,14 +339,13 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
         {/* Footer */}
         <div className="p-4 border-t border-[var(--line)] bg-[var(--surface-2)] flex items-center justify-between">
           <button
-            onClick={() => {
-              onClose();
-              signOut();
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-[var(--bad)] hover:bg-[rgba(239,68,68,0.1)] transition-colors cursor-pointer"
+            type="button"
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-[var(--bad)] hover:bg-[rgba(239,68,68,0.1)] transition-colors cursor-pointer disabled:opacity-50"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>Sign Out</span>
+            <span>{isSigningOut ? "Signing out..." : "Sign Out"}</span>
           </button>
           <button
             onClick={onClose}
