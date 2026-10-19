@@ -12,6 +12,7 @@ from app.store.firestore import (
     _in_memory_store,
     get_all_jobs_internal,
     get_all_nodes,
+    get_all_users,
     get_job_internal,
     get_parts,
     get_recent_events,
@@ -269,21 +270,101 @@ async def api_run_probe(
 
 @router.get("/users")
 async def api_list_users() -> list[dict[str, Any]]:
-    users = list(_in_memory_store.get("users", {}).values())
-    all_jobs = list(_in_memory_store.get("jobs", {}).values())
+    import logging
+    from datetime import datetime, timezone
+    import firebase_admin
 
-    result = []
-    for u in users:
+    logger = logging.getLogger("relay.admin")
+    users_map: dict[str, dict[str, Any]] = {}
+
+    # 1. Stored users from Firestore and in-memory store
+    stored_users = await get_all_users()
+    for u in stored_users:
         uid = u.get("uid")
+        if uid:
+            users_map[uid] = dict(u)
+
+    # 2. Query users directly from Firebase Authentication
+    if firebase_admin._apps:
+        try:
+            from firebase_admin import auth as fb_auth
+
+            page = fb_auth.list_users(max_results=1000)
+            for fb_u in page.iterate_all():
+                uid = fb_u.uid
+                created_iso = ""
+                if fb_u.user_metadata and fb_u.user_metadata.creation_timestamp:
+                    try:
+                        ts = fb_u.user_metadata.creation_timestamp / 1000.0
+                        created_iso = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+                    except Exception:
+                        pass
+
+                claims = fb_u.custom_claims or {}
+                is_admin = bool(claims.get("admin", False))
+                admin_emails = {e.strip().lower() for e in settings.ADMIN_EMAIL.split(",") if e.strip()}
+                admin_emails.add("admin@gmail.com")
+                admin_emails.add("admin@relay.platform")
+                if fb_u.email and fb_u.email.lower() in admin_emails:
+                    is_admin = True
+
+                if uid in users_map:
+                    if not users_map[uid].get("email") and fb_u.email:
+                        users_map[uid]["email"] = fb_u.email
+                    if not users_map[uid].get("displayName") and fb_u.display_name:
+                        users_map[uid]["displayName"] = fb_u.display_name
+                    if not users_map[uid].get("createdAt") and created_iso:
+                        users_map[uid]["createdAt"] = created_iso
+                    if is_admin:
+                        users_map[uid]["role"] = "admin"
+                else:
+                    users_map[uid] = {
+                        "uid": uid,
+                        "email": fb_u.email or f"{uid[:8]}@firebase.user",
+                        "displayName": fb_u.display_name or (fb_u.email.split("@")[0] if fb_u.email else f"User {uid[:6]}"),
+                        "createdAt": created_iso or datetime.now(timezone.utc).isoformat(),
+                        "role": "admin" if is_admin else "user",
+                        "jobCount": 0,
+                    }
+        except Exception as e:
+            logger.warning("Could not list users from Firebase Auth: %s", e)
+
+    # 3. Query all historical jobs to discover any legacy or active submitters
+    all_jobs = await get_all_jobs_internal(limit=500)
+    for j in all_jobs:
+        uid = j.get("userId")
+        if not uid:
+            continue
+        if uid not in users_map:
+            users_map[uid] = {
+                "uid": uid,
+                "email": f"{uid}@relay.user" if "@" not in uid else uid,
+                "displayName": f"User {uid[:8]}",
+                "createdAt": j.get("createdAt", ""),
+                "role": "user",
+                "jobCount": 0,
+            }
+
+    # 4. Count jobs for each user
+    result = []
+    for uid, u in users_map.items():
         job_count = sum(1 for j in all_jobs if j.get("userId") == uid)
+        display_name = u.get("displayName") or u.get("name")
+        if not display_name and u.get("email"):
+            display_name = u["email"].split("@")[0]
+        if not display_name:
+            display_name = f"User {uid[:6]}"
+
         result.append(
             {
                 "uid": uid,
-                "email": u.get("email"),
-                "displayName": u.get("displayName") or u.get("name"),
-                "createdAt": u.get("createdAt"),
+                "email": u.get("email") or f"{uid}@relay.user",
+                "displayName": display_name,
+                "createdAt": u.get("createdAt") or "",
                 "role": u.get("role", "user"),
                 "jobCount": job_count,
             }
         )
+
+    result.sort(key=lambda x: (x.get("jobCount", 0), str(x.get("createdAt", ""))), reverse=True)
     return result

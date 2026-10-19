@@ -12,6 +12,7 @@ import {
 } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fetchWithAuth } from "@/lib/api";
 
 interface AuthContextType {
   user: User | null;
@@ -82,6 +83,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const tokenResult = await currentUser.getIdTokenResult();
           setToken(idToken);
           setIsAdmin(Boolean(tokenResult.claims.admin));
+
+          // Sync user record to backend
+          fetchWithAuth("/users/sync", idToken, {
+            method: "POST",
+            body: JSON.stringify({
+              displayName: currentUser.displayName,
+              photoURL: currentUser.photoURL,
+            }),
+          }).catch(() => {});
         } catch {
           setToken(null);
           setIsAdmin(false);

@@ -24,6 +24,7 @@ from app.store.firestore import (
     log_event,
     set_job_internal,
     set_job_public,
+    upsert_user,
 )
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
@@ -173,6 +174,17 @@ async def create_job(
             iteration=iteration_num,
         )
         await set_job_public(job_id, job_pub.model_dump())
+
+        # Register user in users store
+        await upsert_user(
+            current_user.uid,
+            {
+                "uid": current_user.uid,
+                "email": current_user.email,
+                "displayName": current_user.name or (current_user.email.split("@")[0] if current_user.email else f"User {current_user.uid[:6]}"),
+                "role": "admin" if current_user.is_admin else "user",
+            },
+        )
 
         await log_event(
             "INFO",

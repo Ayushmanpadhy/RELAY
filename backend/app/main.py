@@ -6,7 +6,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import admin, health, jobs
+from app.api import admin, health, jobs, users
 from app.config import settings
 from app.nodes.pool import node_pool
 from app.pipeline.scheduler import scheduler
@@ -108,6 +108,7 @@ app.add_middleware(
 # Mount API routers
 app.include_router(health.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
 app.include_router(admin.auth_router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 

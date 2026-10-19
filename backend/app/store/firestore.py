@@ -381,7 +381,19 @@ writer = BatchedFirestoreWriter()
 
 # High-level store operations
 async def set_user(uid: str, data: dict[str, Any]) -> None:
+    _in_memory_store.setdefault("users", {})[uid] = data
     await writer.enqueue("users", uid, data, merge=True)
+
+
+async def upsert_user(uid: str, data: dict[str, Any]) -> dict[str, Any]:
+    existing = await get_user(uid) or {}
+    merged = {**existing, **data, "uid": uid}
+    if not merged.get("createdAt"):
+        from datetime import datetime, timezone
+        merged["createdAt"] = datetime.now(timezone.utc).isoformat()
+    _in_memory_store.setdefault("users", {})[uid] = merged
+    await writer.enqueue("users", uid, merged, merge=True)
+    return merged
 
 
 async def get_user(uid: str) -> dict[str, Any] | None:
@@ -393,6 +405,22 @@ async def get_user(uid: str) -> dict[str, Any] | None:
         except Exception:
             _log_offline_suppressed("get user")
     return cast(dict[str, Any] | None, _in_memory_store.get("users", {}).get(uid))
+
+
+async def get_all_users() -> list[dict[str, Any]]:
+    users_dict: dict[str, dict[str, Any]] = dict(_in_memory_store.get("users", {}))
+    if is_firestore_connected() and _db is not None:
+        try:
+            docs = _db.collection("users").get()
+            for doc in docs:
+                data = doc.to_dict() or {}
+                uid = doc.id
+                if uid:
+                    data.setdefault("uid", uid)
+                    users_dict[uid] = {**users_dict.get(uid, {}), **data}
+        except Exception:
+            _log_offline_suppressed("get all users")
+    return list(users_dict.values())
 
 
 async def set_job_public(job_id: str, data: dict[str, Any]) -> None:
