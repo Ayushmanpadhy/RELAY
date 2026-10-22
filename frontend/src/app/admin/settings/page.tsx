@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 import { fetchWithAuth } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
-import { Save, CheckCircle2, RotateCw } from "lucide-react";
+import { Save, CheckCircle2, RotateCw, Trash2, AlertTriangle } from "lucide-react";
 import { ProviderRecord } from "@/lib/types";
 
 interface RuntimeSettings {
@@ -21,6 +21,9 @@ export default function AdminSettingsPage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [probeResult, setProbeResult] = useState<ProviderRecord[] | null>(null);
   const [probing, setProbing] = useState(false);
+  const [clearingHistory, setClearingHistory] = useState(false);
+  const [clearSuccess, setClearSuccess] = useState(false);
+  const [clearMessage, setClearMessage] = useState("");
 
   const { data: currentSettings, refetch } = useQuery<RuntimeSettings>({
     queryKey: ["adminSettings", token],
@@ -68,6 +71,38 @@ export default function AdminSettingsPage() {
       // ignore
     } finally {
       setProbing(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (
+      !window.confirm(
+        "Are you sure you want to clear all database history? This will delete all past submissions, internal tasks, audit logs, and uploads for a clean presentation."
+      )
+    ) {
+      return;
+    }
+    setClearingHistory(true);
+    setClearSuccess(false);
+    try {
+      const res = await fetchWithAuth<{ status: string; message: string }>(
+        "/admin/clear-history",
+        token,
+        {
+          method: "POST",
+        }
+      );
+      setClearSuccess(true);
+      setClearMessage(res.message || "Database history cleared successfully!");
+      setTimeout(() => setClearSuccess(false), 5000);
+      refetch();
+    } catch (err: unknown) {
+      alert(
+        "Failed to clear database history: " +
+          (err instanceof Error ? err.message : String(err))
+      );
+    } finally {
+      setClearingHistory(false);
     }
   };
 
@@ -204,6 +239,37 @@ export default function AdminSettingsPage() {
                 </span>
               </div>
             ))}
+          </div>
+        )}
+      </section>
+
+      {/* Presentation / Demo Database Reset */}
+      <section className="bg-[var(--surface)] p-6 rounded-2xl border border-[rgba(239,68,68,0.25)] space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-[var(--bad)] font-semibold text-base">
+              <AlertTriangle className="w-4 h-4" />
+              <h2>Presentation &amp; Demo Reset</h2>
+            </div>
+            <p className="text-xs text-[var(--dim)]">
+              Permanently purges all past job submissions, partition records, event logs, and uploaded files. Registered accounts are kept intact.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleClearHistory}
+            disabled={clearingHistory}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-[rgba(239,68,68,0.12)] text-[var(--bad)] hover:bg-[rgba(239,68,68,0.2)] border border-[rgba(239,68,68,0.3)] transition-all cursor-pointer shrink-0 disabled:opacity-50"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>{clearingHistory ? "Purging History..." : "Clear Database History"}</span>
+          </button>
+        </div>
+
+        {clearSuccess && (
+          <div className="p-3.5 rounded-xl bg-[rgba(74,222,154,0.12)] border border-[var(--ok)] text-[var(--ok)] text-xs font-mono flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{clearMessage}</span>
           </div>
         )}
       </section>

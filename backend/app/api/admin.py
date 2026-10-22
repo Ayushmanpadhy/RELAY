@@ -268,6 +268,33 @@ async def api_run_probe(
     return await registry.run_probe()
 
 
+@router.post("/clear-history")
+async def api_clear_history(
+    current_user: Annotated[AuthUser, Depends(require_admin)],
+) -> dict[str, Any]:
+    from scripts.clear_history import clear_history
+
+    summary = clear_history()
+    heal_all()
+    for node in node_pool.nodes.values():
+        await node.update_state("idle")
+
+    _in_memory_store.setdefault("jobs", {}).clear()
+    _in_memory_store.setdefault("jobs_internal", {}).clear()
+    _in_memory_store.setdefault("parts", {}).clear()
+    _in_memory_store.setdefault("events", {}).clear()
+
+    await log_event(
+        "INFO",
+        f"Platform database history cleared by {current_user.email} for presentation/demo.",
+    )
+    return {
+        "status": "ok",
+        "message": "All database history cleared successfully.",
+        "summary": summary,
+    }
+
+
 @router.get("/users")
 async def api_list_users() -> list[dict[str, Any]]:
     import logging
