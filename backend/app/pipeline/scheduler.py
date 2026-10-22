@@ -165,26 +165,33 @@ class Scheduler:
 
         async def worker_loop() -> None:
             nonlocal completed_parts, reassignment_count, crashed_attempts
-            while not queue.empty():
-                try:
-                    part = queue.get_nowait()
-                except asyncio.QueueEmpty:
+            while True:
+                # Terminate loop when all parts are finished (done or dead)
+                dead_count = sum(1 for p in parts_map.values() if p.status == "dead")
+                if completed_parts + dead_count >= total_parts:
                     break
 
+                try:
+                    part = await asyncio.wait_for(queue.get(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    continue
+
                 # Exclude nodes and providers previously failed on this part
-                {att.nodeId for att in part.attempts}
-                failed_providers = {att.provider for att in part.attempts}
+                failed_nodes = {att.nodeId for att in part.attempts if att.nodeId}
+                failed_providers = {att.provider for att in part.attempts if att.provider}
                 preferred_exclude_provider = (
                     list(failed_providers)[-1] if failed_providers else None
                 )
 
                 node, provider = await node_pool.acquire_idle_node(
-                    exclude_provider=preferred_exclude_provider
+                    exclude_provider=preferred_exclude_provider,
+                    exclude_nodes=failed_nodes,
                 )
                 if not node or not provider:
                     # No worker node or provider currently available; wait a brief moment and requeue
                     await asyncio.sleep(0.5)
                     await queue.put(part)
+                    queue.task_done()
                     continue
 
                 providers_used.add(provider.provider_id)
@@ -312,7 +319,7 @@ Return strictly a valid JSON object matching the requested schema.
                         reassignment_count += 1
                         await log_event(
                             "WARN",
-                            f"Node {node.node_id} ({provider.name}) failed part {part.partId}; reassigning (attempt {len(part.attempts) + 1})",
+                            f"Node {node.node_id} ({provider.name}) failed part {part.partId}; relocating to another node (attempt {len(part.attempts) + 1})",
                             job_id=job_id,
                             node_id=node.node_id,
                         )

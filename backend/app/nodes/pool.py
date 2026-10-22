@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 import time
 from typing import Any, Literal
 
@@ -74,21 +75,40 @@ class NodePool:
             await set_node(node.node_id, node.to_dict())
 
     async def acquire_idle_node(
-        self, exclude_provider: str | None = None
+        self,
+        exclude_provider: str | None = None,
+        exclude_nodes: set[str] | list[str] | None = None,
     ) -> tuple[WorkerNode | None, Any | None]:
         async with self.lock:
             provider = await registry.get_next_worker_provider(exclude_provider=exclude_provider)
             if not provider:
                 return None, None
 
-            for node in self.nodes.values():
-                if node.state == "idle" and not is_node_crashed(node.node_id):
-                    # Bind node to this provider
-                    node.state = "working"
-                    node.provider_id = provider.provider_id
-                    return node, provider
+            excluded = set(exclude_nodes) if exclude_nodes else set()
+            candidates = [
+                node
+                for node in self.nodes.values()
+                if node.state == "idle"
+                and not is_node_crashed(node.node_id)
+                and node.node_id not in excluded
+            ]
 
-            return None, None
+            if not candidates:
+                # If all available idle nodes were in excluded, fallback to any available idle non-crashed node
+                candidates = [
+                    node
+                    for node in self.nodes.values()
+                    if node.state == "idle" and not is_node_crashed(node.node_id)
+                ]
+
+            if not candidates:
+                return None, None
+
+            # Randomly distribute tasks across the 100-node cluster instead of sequentially picking node-001..node-010
+            selected_node = random.choice(candidates)
+            selected_node.state = "working"
+            selected_node.provider_id = provider.provider_id
+            return selected_node, provider
 
     def get_node(self, node_id: str) -> WorkerNode | None:
         return self.nodes.get(node_id)
